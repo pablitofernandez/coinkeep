@@ -1,6 +1,14 @@
 import { defineConfig, type Plugin } from 'vite';
 import fs from 'node:fs';
 import path from 'node:path';
+import { execSync } from 'node:child_process';
+
+/** Versión del juego para la telemetría: el commit con el que se compila. */
+function appVersion() {
+  const sha = process.env.GITHUB_SHA;
+  if (sha) return sha.slice(0, 7);
+  try { return execSync('git rev-parse --short HEAD').toString().trim(); } catch { return 'dev'; }
+}
 
 /**
  * Solo en desarrollo: recibe el registro de cada partida (POST /__log) y lo guarda en logs/<sesión>.json.
@@ -38,4 +46,5 @@ export default defineConfig(({ command }) => ({
   // (GitHub Pages lo sirve en /coinkeep/). Modelos y sonidos usan import.meta.env.BASE_URL.
   base: command === 'build' ? './' : '/',
   plugins: [gameLogPlugin()],
+  define: { __APP_VERSION__: JSON.stringify(appVersion()) },
 }));

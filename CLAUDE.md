@@ -190,6 +190,14 @@ Se elige en la portada (Normal / Difícil / Pesadilla) y se guarda en `localStor
 - Se ordena por oleada (de más a menos) y, a igualdad, por tiempo (menos es mejor).
 - **No envíes puntuaciones de prueba** a la tabla real. Si alguna se cuela, se borra desde el panel de Supabase.
 
+## Telemetría de la versión publicada (Supabase)
+
+- `src/telemetry.ts` envía a la tabla privada `game_logs` (`supabase/game_logs.sql`) el registro por oleadas **solo en producción** (en local sigue `devlog.ts` con `logs/`). Anónimo: id aleatorio por partida (`session`) y por navegador (`player`, en `sg-player`), plataforma aproximada y pantalla; sin userAgent completo.
+- Una fila por oleada terminada (solo las oleadas nuevas), otra al perder (`over`) y otra al cerrar o dejar la pestaña a medias (`left`). La versión es el commit con el que se compiló (`__APP_VERSION__`, de `vite.config.ts`).
+- Con la clave pública solo se puede insertar. Para leer: **`npm run logs:pull`** (`scripts/pull-logs.mjs`) con `SUPABASE_SECRET_KEY` en `.env.local` (no se sube; la pone el usuario). Descarga lo nuevo a `logs/remote/`, un archivo por partida con el mismo formato que los logs locales más `difficulty`, `version`, `events` y `result.left`.
+- «Analiza las partidas» → primero `npm run logs:pull` y luego mira `logs/remote/` además de `logs/`.
+- Para probarla sin ensuciar la tabla: `npm run build` y la configuración `build-preview` (puerto 4173), interceptando `fetch` en la consola.
+
 ## Audio
 
 - **Muestras** (`public/sounds/`):

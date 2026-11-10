@@ -69,6 +69,10 @@ It isn't included in the production build.
   - Fantasy music synthesized in real time: flute, Karplus-Strong harp, strings, cello and drums, with reverb.
 - Fixed-step simulation, fully separated from rendering (`src/game/` knows nothing about Three.js).
 
+## Leaderboard and anonymous stats
+
+The global leaderboard and the game stats live in [Supabase](https://supabase.com) (see `supabase/`). To balance the difficulty, the published game sends **anonymous** per-wave stats of each run (difficulty, wave reached, money, kills, towers, device type and screen size). No names or personal data are collected: just a random id per run and per browser. Names are only stored if you choose to save a leaderboard score.
+
 ## Asset credits
 
 All models and sounds are **CC0** (public domain). Many thanks to their authors:

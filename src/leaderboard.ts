@@ -26,6 +26,9 @@ const headers = (extra: Record<string, string> = {}): Record<string, string> => 
   ...extra,
 });
 
+/** Conexión con Supabase, compartida con la telemetría (telemetry.ts). */
+export const SUPABASE = { url: URL ?? '', enabled: leaderboardEnabled, headers };
+
 /** Limpia el nombre: sin caracteres de control ni espacios de más, 1–16 caracteres. */
 export function cleanName(s: string) {
   return s.replace(/[\u0000-\u001f\u007f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 16);

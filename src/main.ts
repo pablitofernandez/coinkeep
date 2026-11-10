@@ -5,6 +5,7 @@ import { DIFFICULTIES, DIFFICULTY } from './config';
 import { cleanName, leaderboardEnabled, rankOf, savedName, submitScore, topScores, type Score } from './leaderboard';
 import { Sound } from './audio';
 import { DevLog } from './devlog';
+import { Telemetry } from './telemetry';
 import { Input, isTyping, preventBrowserZoom } from './input';
 import { loadAssets } from './render/assets';
 import { CAM_ELEVATION_SIN, View, fmt } from './render/view';
@@ -22,6 +23,7 @@ loading.remove();
 const view = new View($('app'));
 const input = new Input(document.body, $('joy'), $('joy-knob'));
 const devlog = new DevLog();
+const telemetry = new Telemetry();   // estadísticas anónimas de la versión publicada (para equilibrar)
 
 // --- pantalla de título: de fondo, una partida de exhibición (torres, lobos, zombis) con la cámara girando
 let G: GameState = createGame();
@@ -136,6 +138,7 @@ function restart() {
   G = createGame(difficulty);
   view.reset(G);
   devlog.start();
+  telemetry.start(G);
   $('gameover').classList.add('hidden');
 }
 
@@ -292,6 +295,7 @@ function frame(now: number) {
   view.render(G, simDt);
   updateHud();
   devlog.update(G);
+  telemetry.update(G);
 }
 requestAnimationFrame(frame);
 
@@ -327,6 +331,7 @@ Object.assign(window, {
     sound.handle(G, G.events);
     view.render(G, FIXED);
     devlog.update(G);
+    telemetry.update(G);
   },
 });
 
