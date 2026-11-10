@@ -1,0 +1,678 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Stack Defense POC</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1d2b1f; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+"use strict";
+// ============================================================
+//  CONFIG
+// ============================================================
+const TW = 64, TH = 32;           // tamaño del tile isométrico en px
+const MAP = 26;                   // mapa MAP x MAP tiles
+const BASE = { x: 13, y: 13 };    // centro de la base
+const BASE_HALF = 1.1;            // medio lado de la base (en tiles)
+
+// Orden de desbloqueo de las parcelas de construcción.
+// unlock = nº de edificios construidos necesarios para que aparezca.
+const PAD_DEFS = [
+  { type: 'archer', x: 10,   y: 13,   cost: 10,  unlock: 0 },
+  { type: 'power',  x: 15.6, y: 15.6, cost: 15,  unlock: 1, repeat: true },
+  { type: 'archer', x: 16,   y: 13,   cost: 25,  unlock: 1 },
+  { type: 'archer', x: 13,   y: 10,   cost: 40,  unlock: 2 },
+  { type: 'repair', x: 10.4, y: 15.6, cost: 20,  unlock: 2, repeat: true },
+  { type: 'forge',  x: 15.6, y: 10.4, cost: 50,  unlock: 3, repeat: true },
+  { type: 'cannon', x: 13,   y: 16.4, cost: 80,  unlock: 3 },
+  { type: 'archer', x: 10,   y: 10,   cost: 90,  unlock: 4 },
+  { type: 'cannon', x: 7.5,  y: 13,   cost: 160, unlock: 5 },
+  { type: 'archer', x: 18.5, y: 13,   cost: 200, unlock: 6 },
+  { type: 'cannon', x: 13,   y: 7.5,  cost: 300, unlock: 7 },
+  { type: 'archer', x: 13,   y: 19,   cost: 380, unlock: 8 },
+  { type: 'cannon', x: 18.5, y: 18.5, cost: 500, unlock: 9 },
+  { type: 'archer', x: 7.5,  y: 7.5,  cost: 600, unlock: 10 },
+  { type: 'cannon', x: 18.5, y: 7.5,  cost: 800, unlock: 11 },
+  { type: 'archer', x: 7.5,  y: 18.5, cost: 900, unlock: 12 },
+];
+const PAD_INFO = {
+  archer: { label: 'Torre arquera', icon: '🏹' },
+  cannon: { label: 'Cañón',         icon: '💣' },
+  power:  { label: 'Fuerza +1',     icon: '⚔️' },
+  repair: { label: 'Reparar base',  icon: '🔧' },
+  forge:  { label: 'Torres +25%',   icon: '🔨' },
+};
+const TOWER_STATS = {
+  archer: { range: 4.6, cd: 0.75, dmg: 1.2, speed: 12, splash: 0 },
+  cannon: { range: 3.8, cd: 2.0,  dmg: 5,   speed: 7,  splash: 1.3 },
+};
+
+// ============================================================
+//  SETUP
+// ============================================================
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = W * DPR; cv.height = H * DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', resize); resize();
+
+// ============================================================
+//  INPUT (teclado + joystick táctil/ratón)
+// ============================================================
+const keys = {};
+window.addEventListener('keydown', e => {
+  keys[e.key.toLowerCase()] = true;
+  if (e.key.startsWith('Arrow')) e.preventDefault();
+  if (G.over) restart();
+});
+window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+const joy = { active: false, id: null, ox: 0, oy: 0, dx: 0, dy: 0 };
+cv.addEventListener('pointerdown', e => {
+  if (G.over) { restart(); return; }
+  joy.active = true; joy.id = e.pointerId; joy.ox = e.clientX; joy.oy = e.clientY; joy.dx = joy.dy = 0;
+  cv.setPointerCapture(e.pointerId);
+});
+cv.addEventListener('pointermove', e => {
+  if (!joy.active || e.pointerId !== joy.id) return;
+  let dx = e.clientX - joy.ox, dy = e.clientY - joy.oy;
+  const d = Math.hypot(dx, dy), max = 50;
+  if (d > max) { joy.ox += dx * (1 - max / d); joy.oy += dy * (1 - max / d); dx = e.clientX - joy.ox; dy = e.clientY - joy.oy; }
+  joy.dx = dx / max; joy.dy = dy / max;
+});
+const endJoy = e => { if (e.pointerId === joy.id) { joy.active = false; joy.dx = joy.dy = 0; } };
+cv.addEventListener('pointerup', endJoy);
+cv.addEventListener('pointercancel', endJoy);
+
+// Devuelve la dirección de movimiento en coordenadas de MUNDO
+function inputDir() {
+  let sx = 0, sy = 0;
+  if (keys['arrowleft'] || keys['a']) sx -= 1;
+  if (keys['arrowright'] || keys['d']) sx += 1;
+  if (keys['arrowup'] || keys['w']) sy -= 1;
+  if (keys['arrowdown'] || keys['s']) sy += 1;
+  if (joy.active) { sx += joy.dx; sy += joy.dy; }
+  const m = Math.hypot(sx, sy);
+  if (m < 0.15) return { x: 0, y: 0 };
+  const mag = Math.min(1, m);
+  // pantalla -> mundo (inversa de la proyección isométrica, con TW = 2*TH)
+  let wx = sx + sy * 2, wy = sy * 2 - sx;
+  const wm = Math.hypot(wx, wy);
+  return { x: wx / wm * mag, y: wy / wm * mag };
+}
+
+// ============================================================
+//  ESTADO
+// ============================================================
+let G;
+function restart() {
+  G = {
+    t: 0, over: false, built: 0,
+    player: { x: 13, y: 15.8, coins: 0, dmg: 1, range: 1.5, cd: 0, speed: 4.4, swing: 0, target: null, lvl: 1, bob: 0 },
+    base: { hp: 60, max: 60, shake: 0 },
+    enemies: [], drops: [], shots: [], flyers: [], texts: [], buildings: [], booms: [],
+    pads: PAD_DEFS.map(d => ({ ...d, paid: 0, active: false, level: 0, pulse: 0, cool: 0 })),
+    wave: 0, waveTimer: 5, spawnLeft: 0, spawnTimer: 0, towerMult: 1,
+    cam: { x: 0, y: 0 }, transferAcc: 0,
+  };
+  const p = isoRaw(G.player.x, G.player.y);
+  G.cam.x = p.x; G.cam.y = p.y;
+  updateUnlocks();
+}
+
+function updateUnlocks() {
+  for (const pad of G.pads) {
+    if (!pad.active && !pad.done && pad.unlock <= G.built) {
+      pad.active = true; pad.pulse = 1;
+      floatText(pad.x, pad.y, '¡Nuevo!', '#7ff');
+    }
+  }
+}
+
+// ============================================================
+//  PROYECCIÓN ISOMÉTRICA
+// ============================================================
+function isoRaw(x, y) { return { x: (x - y) * TW / 2, y: (x + y) * TH / 2 }; }
+function w2s(x, y, z = 0) {
+  return [(x - y) * TW / 2 - G.cam.x + W / 2, (x + y) * TH / 2 - G.cam.y + H / 2 - z];
+}
+
+// ============================================================
+//  HELPERS
+// ============================================================
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const rand = (a, b) => a + Math.random() * (b - a);
+function floatText(x, y, txt, color = '#fff', size = 14) {
+  G.texts.push({ x, y, z: 30, txt, color, size, life: 1.2 });
+}
+function addFlyer(from, to, kind = 'coin') {
+  if (G.flyers.length > 120) return;
+  G.flyers.push({ fx: from.x, fy: from.y, fz: from.z || 0, to, t: 0, dur: rand(0.25, 0.45), kind });
+}
+function fmt(n) { return n >= 10000 ? (n / 1000).toFixed(1) + 'k' : String(Math.floor(n)); }
+
+// ============================================================
+//  OLEADAS / ENEMIGOS
+// ============================================================
+function enemyStats(wave, boss) {
+  const hp = Math.ceil(3 * Math.pow(1.2, wave - 1)) * (boss ? 10 : 1);
+  return {
+    hp, maxHp: hp,
+    speed: (0.9 + Math.min(0.7, wave * 0.035)) * (boss ? 0.6 : rand(0.9, 1.15)),
+    value: (2 + Math.floor(wave / 3)) * (boss ? 12 : 1),
+    dmg: boss ? 3 : 1,                 // daño por golpe a la base
+    atkRate: boss ? 1.5 : 2.0,         // segundos entre golpes
+    atk: 0.5,
+    r: boss ? 0.55 : 0.3,
+    boss,
+  };
+}
+function spawnEnemy(boss = false) {
+  // posición aleatoria en el borde del mapa
+  const side = Math.floor(Math.random() * 4), t = rand(1, MAP - 1);
+  let x, y;
+  if (side === 0) { x = t; y = 0.5; } else if (side === 1) { x = MAP - 0.5; y = t; }
+  else if (side === 2) { x = t; y = MAP - 0.5; } else { x = 0.5; y = t; }
+  G.enemies.push({ x, y, ...enemyStats(G.wave, boss), hit: 0, id: Math.random() });
+}
+function updateWaves(dt) {
+  G.waveTimer -= dt;
+  if (G.waveTimer <= 0) {
+    G.wave++;
+    G.spawnLeft = 4 + G.wave * 2;
+    G.spawnTimer = 0;
+    G.waveTimer = 24;
+    if (G.wave % 5 === 0) { spawnEnemy(true); floatText(G.player.x, G.player.y, '¡JEFE!', '#f55', 22); }
+    else floatText(G.player.x, G.player.y, 'Oleada ' + G.wave, '#ffd34d', 20);
+  }
+  if (G.spawnLeft > 0) {
+    G.spawnTimer -= dt;
+    if (G.spawnTimer <= 0) {
+      spawnEnemy(false); G.spawnLeft--;
+      G.spawnTimer = Math.max(0.25, 13 / (4 + G.wave * 2));
+    }
+  }
+}
+
+function killEnemy(e, byTower) {
+  e.dead = true;
+  if (byTower) {
+    // el loot va a la mesa de la torre
+    byTower.table += e.value;
+    addFlyer({ x: e.x, y: e.y, z: 10 }, { x: byTower.tx, y: byTower.ty, z: 12 });
+  } else {
+    const n = Math.min(e.value, 6);
+    let remaining = e.value;
+    for (let i = 0; i < n; i++) {
+      const worth = i === n - 1 ? remaining : Math.floor(e.value / n);
+      remaining -= worth;
+      const a = rand(0, Math.PI * 2), s = rand(0.8, 2);
+      G.drops.push({ x: e.x, y: e.y, z: 10, vx: Math.cos(a) * s, vy: Math.sin(a) * s, vz: rand(60, 120), worth, age: 0 });
+    }
+  }
+}
+
+function damageEnemy(e, dmg, tower) {
+  if (e.dead) return;
+  e.hp -= dmg; e.hit = 0.12;
+  if (e.hp <= 0) killEnemy(e, tower);
+}
+
+function updateEnemies(dt) {
+  for (const e of G.enemies) {
+    if (e.dead) continue;
+    e.hit = Math.max(0, e.hit - dt);
+    e.lunge = Math.max(0, (e.lunge || 0) - dt);
+    const dx = BASE.x - e.x, dy = BASE.y - e.y, d = Math.hypot(dx, dy);
+    // ¿pegado a la muralla? (la base es un cuadrado de 2.2 x 2.2)
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < BASE_HALF + e.r + 0.05) {
+      e.attacking = true;
+      e.atk -= dt;
+      if (e.atk <= 0) {
+        e.atk = e.atkRate; e.lunge = 0.2;
+        G.base.hp -= e.dmg; G.base.shake = 0.15;
+        floatText(e.x, e.y, '-' + e.dmg, '#f55', 12);
+        if (G.base.hp <= 0) { G.base.hp = 0; G.over = true; }
+      }
+      continue;
+    }
+    e.attacking = false;
+    e.x += dx / d * e.speed * dt; e.y += dy / d * e.speed * dt;
+  }
+  // separación simple
+  const es = G.enemies;
+  for (let i = 0; i < es.length; i++) for (let j = i + 1; j < es.length; j++) {
+    const a = es[i], b = es[j];
+    const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy), min = a.r + b.r;
+    if (d > 0 && d < min) {
+      const push = (min - d) / 2;
+      a.x -= dx / d * push; a.y -= dy / d * push; b.x += dx / d * push; b.y += dy / d * push;
+    }
+  }
+  // que nadie se meta dentro de la base al empujarse
+  for (const e of es) {
+    const ex = e.x - BASE.x, ey = e.y - BASE.y, lim = BASE_HALF + e.r;
+    if (Math.abs(ex) < lim && Math.abs(ey) < lim) {
+      if (Math.abs(ex) > Math.abs(ey)) e.x = BASE.x + Math.sign(ex || 1) * lim;
+      else e.y = BASE.y + Math.sign(ey || 1) * lim;
+    }
+  }
+  G.enemies = G.enemies.filter(e => !e.dead);
+}
+
+// ============================================================
+//  JUGADOR
+// ============================================================
+function solids() {
+  const s = [{ x: BASE.x, y: BASE.y, r: 1.25 }];
+  for (const b of G.buildings) s.push({ x: b.x, y: b.y, r: 0.5 });
+  return s;
+}
+function updatePlayer(dt) {
+  const p = G.player, dir = inputDir();
+  p.x += dir.x * p.speed * dt; p.y += dir.y * p.speed * dt;
+  p.moving = Math.hypot(dir.x, dir.y) > 0.1;
+  if (p.moving) p.bob += dt * 12;
+  for (const s of solids()) {
+    const dx = p.x - s.x, dy = p.y - s.y, d = Math.hypot(dx, dy), min = s.r + 0.3;
+    if (d < min && d > 0) { p.x = s.x + dx / d * min; p.y = s.y + dy / d * min; }
+  }
+  p.x = Math.max(0.4, Math.min(MAP - 0.4, p.x));
+  p.y = Math.max(0.4, Math.min(MAP - 0.4, p.y));
+
+  // ataque automático al enemigo más cercano
+  p.cd -= dt; p.swing = Math.max(0, p.swing - dt);
+  if (p.cd <= 0) {
+    let best = null, bd = p.range;
+    for (const e of G.enemies) { const d = dist(p, e) - e.r; if (d < bd) { bd = d; best = e; } }
+    if (best) {
+      damageEnemy(best, p.dmg, null);
+      p.cd = 0.32; p.swing = 0.15; p.target = { x: best.x, y: best.y };
+    }
+  }
+
+  // recoger monedas del suelo (imán)
+  for (const c of G.drops) {
+    if (c.z > 2 || c.age < 0.25) continue;
+    const d = dist(p, c);
+    if (d < 1.8) { const k = Math.min(1, dt * 10 / Math.max(d, 0.2)); c.x += (p.x - c.x) * k; c.y += (p.y - c.y) * k; }
+    if (d < 0.35) { c.taken = true; p.coins += c.worth; }
+  }
+  G.drops = G.drops.filter(c => !c.taken);
+
+  // recoger loot de las mesas de las torres
+  let onTable = null;
+  for (const b of G.buildings) if (b.table > 0 && Math.hypot(p.x - b.tx, p.y - b.ty) < 0.9) onTable = b;
+  // depositar en parcelas
+  let onPad = null;
+  for (const pad of G.pads) if (pad.active && Math.hypot(p.x - pad.x, p.y - pad.y) < 0.85) onPad = pad;
+
+  if (onTable) {
+    G.transferAcc += dt * Math.max(20, onTable.table * 2.5);
+    let n = Math.min(Math.floor(G.transferAcc), onTable.table);
+    G.transferAcc -= Math.floor(G.transferAcc);
+    if (n > 0) {
+      onTable.table -= n; p.coins += n;
+      addFlyer({ x: onTable.tx, y: onTable.ty, z: 14 }, { player: true });
+    }
+  } else if (onPad && p.coins > 0 && onPad.cool <= 0) {
+    const left = onPad.cost - onPad.paid;
+    G.transferAcc += dt * Math.max(15, left * 1.6);
+    let n = Math.min(Math.floor(G.transferAcc), p.coins, left);
+    G.transferAcc -= Math.floor(G.transferAcc);
+    if (n > 0) {
+      p.coins -= n; onPad.paid += n;
+      addFlyer({ x: p.x, y: p.y, z: 40 + Math.min(p.coins, 50) * 2.2 }, { x: onPad.x, y: onPad.y, z: 0 });
+      if (onPad.paid >= onPad.cost) completePad(onPad);
+    }
+  } else G.transferAcc = 0;
+  for (const pad of G.pads) pad.cool = Math.max(0, pad.cool - dt);
+}
+
+function completePad(pad) {
+  const info = PAD_INFO[pad.type];
+  if (pad.type === 'archer' || pad.type === 'cannon') {
+    pad.active = false; pad.done = true;
+    G.buildings.push({ type: pad.type, x: pad.x, y: pad.y, tx: pad.x + 0.05, ty: pad.y + 1.05, cd: 0.5, table: 0, rise: 0 });
+    G.built++;
+    floatText(pad.x, pad.y, info.label + '!', '#7f7', 18);
+    updateUnlocks();
+  } else {
+    pad.level++;
+    if (pad.type === 'power') { G.player.dmg += 1; G.player.range += 0.08; G.player.lvl++; floatText(pad.x, pad.y, 'Daño ' + G.player.dmg, '#7f7', 18); }
+    if (pad.type === 'repair') { G.base.max += 5; G.base.hp = G.base.max; floatText(pad.x, pad.y, 'Base reparada', '#7f7', 18); }
+    if (pad.type === 'forge') { G.towerMult *= 1.25; floatText(pad.x, pad.y, 'Torres x' + G.towerMult.toFixed(2), '#7f7', 18); }
+    pad.paid = 0; pad.cost = Math.ceil(pad.cost * 1.7); pad.cool = 1.2; pad.pulse = 1;
+    if (pad.level === 1) { G.built++; updateUnlocks(); }
+  }
+}
+
+// ============================================================
+//  TORRES Y PROYECTILES
+// ============================================================
+function updateBuildings(dt) {
+  for (const b of G.buildings) {
+    b.rise = Math.min(1, b.rise + dt * 3);
+    const st = TOWER_STATS[b.type];
+    b.cd -= dt;
+    if (b.cd > 0) continue;
+    let best = null, bd = st.range;
+    for (const e of G.enemies) {
+      const d = dist(b, e);
+      // prioriza al más cercano a la base
+      if (d < st.range) { const db = Math.hypot(e.x - BASE.x, e.y - BASE.y); if (!best || db < bd) { best = e; bd = db; } }
+    }
+    if (best) {
+      b.cd = st.cd;
+      G.shots.push({ type: b.type, x: b.x, y: b.y, z: b.type === 'archer' ? 70 : 45, target: best, tx: best.x, ty: best.y,
+        speed: st.speed, dmg: st.dmg * G.towerMult, splash: st.splash, from: b, t: 0 });
+    }
+  }
+}
+function updateShots(dt) {
+  for (const s of G.shots) {
+    if (s.target && !s.target.dead) { s.tx = s.target.x; s.ty = s.target.y; }
+    const dx = s.tx - s.x, dy = s.ty - s.y, d = Math.hypot(dx, dy);
+    const step = s.speed * dt;
+    s.t += dt;
+    s.z = Math.max(8, s.z - dt * (s.type === 'archer' ? 120 : 60));
+    if (d <= step) {
+      s.done = true;
+      if (s.splash > 0) {
+        G.booms.push({ x: s.tx, y: s.ty, life: 0.35, r: s.splash });
+        for (const e of G.enemies) if (Math.hypot(e.x - s.tx, e.y - s.ty) < s.splash) damageEnemy(e, s.dmg, s.from);
+      } else if (s.target && !s.target.dead) damageEnemy(s.target, s.dmg, s.from);
+    } else { s.x += dx / d * step; s.y += dy / d * step; }
+  }
+  G.shots = G.shots.filter(s => !s.done);
+}
+
+// ============================================================
+//  EFECTOS
+// ============================================================
+function updateFx(dt) {
+  for (const c of G.drops) {
+    c.age += dt;
+    if (c.z > 0 || c.vz > 0) {
+      c.vz -= 400 * dt; c.z += c.vz * dt; c.x += c.vx * dt; c.y += c.vy * dt;
+      if (c.z <= 0) { c.z = 0; c.vz = 0; c.vx = c.vy = 0; }
+    }
+  }
+  for (const f of G.flyers) f.t += dt;
+  G.flyers = G.flyers.filter(f => f.t < f.dur);
+  for (const t of G.texts) { t.life -= dt; t.z += dt * 40; }
+  G.texts = G.texts.filter(t => t.life > 0);
+  for (const b of G.booms) b.life -= dt;
+  G.booms = G.booms.filter(b => b.life > 0);
+  for (const p of G.pads) p.pulse = Math.max(0, p.pulse - dt);
+  G.base.shake = Math.max(0, G.base.shake - dt);
+  // cámara suave
+  const t = isoRaw(G.player.x, G.player.y);
+  const k = Math.min(1, dt * 6);
+  G.cam.x += (t.x - G.cam.x) * k; G.cam.y += (t.y - 40 - G.cam.y) * k;
+}
+
+// ============================================================
+//  DIBUJO
+// ============================================================
+function poly(pts, fill, stroke) {
+  ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.closePath();
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+  if (stroke) { ctx.strokeStyle = stroke; ctx.stroke(); }
+}
+function shade(hex, f) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.min(255, ((n >> 16) & 255) * f) | 0, g = Math.min(255, ((n >> 8) & 255) * f) | 0, b = Math.min(255, (n & 255) * f) | 0;
+  return `rgb(${r},${g},${b})`;
+}
+function box(cx, cy, w, d, h, color, z0 = 0) {
+  const x0 = cx - w / 2, x1 = cx + w / 2, y0 = cy - d / 2, y1 = cy + d / 2;
+  const A = w2s(x1, y0, z0), B = w2s(x1, y1, z0), C = w2s(x0, y1, z0);
+  const At = w2s(x1, y0, z0 + h), Bt = w2s(x1, y1, z0 + h), Ct = w2s(x0, y1, z0 + h), Dt = w2s(x0, y0, z0 + h);
+  poly([A, B, Bt, At], shade(color, 0.75));
+  poly([B, C, Ct, Bt], shade(color, 0.55));
+  poly([At, Bt, Ct, Dt], shade(color, 1.05));
+}
+function roof(cx, cy, w, d, z0, h, color) {
+  const x0 = cx - w / 2, x1 = cx + w / 2, y0 = cy - d / 2, y1 = cy + d / 2;
+  const At = w2s(x1, y0, z0), Bt = w2s(x1, y1, z0), Ct = w2s(x0, y1, z0), Dt = w2s(x0, y0, z0);
+  const P = w2s(cx, cy, z0 + h);
+  poly([Dt, At, P], shade(color, 1.1)); poly([Ct, Dt, P], shade(color, 0.9));
+  poly([At, Bt, P], shade(color, 0.8)); poly([Bt, Ct, P], shade(color, 0.6));
+}
+function shadow(x, y, r) {
+  const [sx, sy] = w2s(x, y);
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.beginPath(); ctx.ellipse(sx, sy, r * TW / 2, r * TH / 2, 0, 0, Math.PI * 2); ctx.fill();
+}
+function coinDisc(sx, sy, w = 9) {
+  ctx.fillStyle = '#b8860b';
+  ctx.beginPath(); ctx.ellipse(sx, sy + 1.5, w, w / 2, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#ffd34d';
+  ctx.beginPath(); ctx.ellipse(sx, sy, w, w / 2, 0, 0, Math.PI * 2); ctx.fill();
+}
+function bar(sx, sy, w, frac, color) {
+  ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(sx - w / 2 - 1, sy - 1, w + 2, 6);
+  ctx.fillStyle = color; ctx.fillRect(sx - w / 2, sy, w * Math.max(0, frac), 4);
+}
+function text(t, x, y, size = 14, color = '#fff', align = 'center') {
+  ctx.font = `bold ${size}px system-ui, sans-serif`; ctx.textAlign = align; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.strokeText(t, x, y);
+  ctx.fillStyle = color; ctx.fillText(t, x, y);
+}
+
+function drawFloor() {
+  for (let i = 0; i < MAP; i++) for (let j = 0; j < MAP; j++) {
+    const a = w2s(i, j), b = w2s(i + 1, j), c = w2s(i + 1, j + 1), d = w2s(i, j + 1);
+    if (b[0] < -TW || d[0] > W + TW || a[1] > H + TH || c[1] < -TH) continue;
+    const near = Math.hypot(i + 0.5 - BASE.x, j + 0.5 - BASE.y) < 4.2;
+    const col = near ? ((i + j) % 2 ? '#a89a6e' : '#b3a578') : ((i + j) % 2 ? '#4d8a3f' : '#559446');
+    poly([a, b, c, d], col);
+  }
+  // borde del mapa
+  const e1 = w2s(0, MAP), e2 = w2s(MAP, MAP), e3 = w2s(MAP, 0);
+  poly([e1, e2, [e2[0], e2[1] + 18], [e1[0], e1[1] + 18]], '#3b2a1a');
+  poly([e2, e3, [e3[0], e3[1] + 18], [e2[0], e2[1] + 18]], '#2c1f13');
+}
+
+function drawPad(pad) {
+  const s = 0.75 + pad.pulse * 0.25 * Math.sin(pad.pulse * 20);
+  const pts = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([dx, dy]) => w2s(pad.x + dx * 0.7 * s, pad.y + dy * 0.7 * s));
+  poly(pts, 'rgba(255,255,255,0.18)');
+  // progreso
+  const f = pad.paid / pad.cost;
+  if (f > 0) {
+    const fp = [[-1, 1], [1, 1], [1, 1 - 2 * f], [-1, 1 - 2 * f]].map(([dx, dy]) => w2s(pad.x + dx * 0.7 * s, pad.y + dy * 0.7 * s));
+    poly(fp, 'rgba(255,211,77,0.55)');
+  }
+  ctx.setLineDash([6, 4]); ctx.lineWidth = 2;
+  poly(pts, null, '#fff'); ctx.setLineDash([]);
+  const [sx, sy] = w2s(pad.x, pad.y);
+  const info = PAD_INFO[pad.type];
+  ctx.font = '20px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(info.icon, sx, sy - 6);
+  text(fmt(pad.cost - pad.paid), sx, sy + 12, 13, '#ffd34d');
+  text(info.label + (pad.level ? ' (Nv ' + (pad.level + 1) + ')' : ''), sx, sy + 27, 10, '#fff');
+}
+
+function drawBase() {
+  const sh = G.base.shake > 0 ? rand(-0.05, 0.05) : 0;
+  const bx = BASE.x + sh, by = BASE.y;
+  box(bx, by, 2.2, 2.2, 34, '#8c8c99');
+  // almenas
+  for (const [dx, dy] of [[-0.9, -0.9], [0.9, -0.9], [0.9, 0.9], [-0.9, 0.9]]) box(bx + dx, by + dy, 0.5, 0.5, 22, '#9d9dab', 34);
+  box(bx, by, 1.1, 1.1, 30, '#a0a0b0', 34);
+  roof(bx, by, 1.3, 1.3, 64, 30, '#3a6ccf');
+  const [sx, sy] = w2s(bx, by, 110);
+  bar(sx, sy, 60, G.base.hp / G.base.max, '#4caf50');
+}
+
+function drawBuilding(b) {
+  const r = b.rise;
+  if (b.type === 'archer') {
+    box(b.x, b.y, 0.8, 0.8, 50 * r, '#9b7b52');
+    box(b.x, b.y, 1.0, 1.0, 8 * r, '#7a5c3a', 50 * r);
+    roof(b.x, b.y, 1.0, 1.0, 58 * r, 22 * r, '#c0392b');
+  } else {
+    box(b.x, b.y, 0.95, 0.95, 26 * r, '#6d6d78');
+    box(b.x, b.y, 0.6, 0.6, 14 * r, '#3a3a42', 26 * r);
+    const [sx, sy] = w2s(b.x, b.y, 44 * r);
+    ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(sx, sy, 8, 0, Math.PI * 2); ctx.fill();
+  }
+}
+function drawTable(b) {
+  box(b.tx, b.ty, 0.8, 0.55, 10, '#8a5a2b');
+  const n = Math.min(b.table, 40);
+  for (let i = 0; i < n; i++) {
+    const col = i % 4, row = Math.floor(i / 4);
+    const ox = (col % 2 ? 0.15 : -0.15), oy = (col > 1 ? 0.1 : -0.1);
+    const [sx, sy] = w2s(b.tx + ox, b.ty + oy, 12 + row * 3);
+    coinDisc(sx, sy, 6);
+  }
+  if (b.table > 0) { const [sx, sy] = w2s(b.tx, b.ty, 22 + Math.ceil(n / 4) * 3); text(fmt(b.table), sx, sy, 12, '#ffd34d'); }
+}
+
+function drawPlayer() {
+  const p = G.player;
+  shadow(p.x, p.y, 0.32);
+  const bob = p.moving ? Math.abs(Math.sin(p.bob)) * 3 : 0;
+  const [sx, sy] = w2s(p.x, p.y, bob);
+  // cuerpo
+  ctx.fillStyle = '#2b6cd6'; ctx.beginPath(); ctx.roundRect(sx - 9, sy - 30, 18, 26, 6); ctx.fill();
+  ctx.fillStyle = '#f2c9a0'; ctx.beginPath(); ctx.arc(sx, sy - 36, 8, 0, Math.PI * 2); ctx.fill();
+  // espada / golpe
+  if (p.swing > 0 && p.target) {
+    const [tx, ty] = w2s(p.target.x, p.target.y, 14);
+    ctx.strokeStyle = `rgba(255,255,255,${p.swing / 0.15})`; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(sx, sy - 18); ctx.lineTo(tx, ty); ctx.stroke();
+  }
+  // pila de monedas en la espalda
+  const n = Math.min(p.coins, 50);
+  for (let i = 0; i < n; i++) {
+    const sway = Math.sin(G.t * 3 + i * 0.15) * i * 0.06;
+    coinDisc(sx - 2 + sway, sy - 28 - 14 - i * 2.2, 8);
+  }
+  if (p.coins > 0) text(fmt(p.coins), sx + 20, sy - 46 - n * 2.2, 14, '#ffd34d', 'left');
+}
+
+function drawEnemy(e) {
+  shadow(e.x, e.y, e.r);
+  // pequeño "embiste" hacia la base al golpear
+  const l = e.lunge > 0 ? Math.sin(e.lunge / 0.2 * Math.PI) * 0.25 : 0;
+  const ld = Math.hypot(BASE.x - e.x, BASE.y - e.y) || 1;
+  const [sx, sy] = w2s(e.x + (BASE.x - e.x) / ld * l, e.y + (BASE.y - e.y) / ld * l);
+  const s = e.r * 40;
+  ctx.fillStyle = e.hit > 0 ? '#fff' : (e.boss ? '#7b1fa2' : '#d63c3c');
+  ctx.beginPath(); ctx.ellipse(sx, sy - s * 0.8, s * 0.7, s * 0.85, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#000';
+  ctx.fillRect(sx - s * 0.3, sy - s, 3, 3); ctx.fillRect(sx + s * 0.2, sy - s, 3, 3);
+  if (e.hp < e.maxHp) bar(sx, sy - s * 1.9, s * 1.4, e.hp / e.maxHp, '#f44');
+}
+
+function drawShot(s) {
+  const [sx, sy] = w2s(s.x, s.y, s.z);
+  if (s.type === 'archer') {
+    const [tx, ty] = w2s(s.tx, s.ty, 10);
+    const a = Math.atan2(ty - sy, tx - sx);
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx - Math.cos(a) * 12, sy - Math.sin(a) * 12); ctx.stroke();
+  } else {
+    ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(sx, sy, 5, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+function render() {
+  ctx.fillStyle = '#1d2b1f'; ctx.fillRect(0, 0, W, H);
+  drawFloor();
+  for (const pad of G.pads) if (pad.active) drawPad(pad);
+  for (const b of G.booms) {
+    const [sx, sy] = w2s(b.x, b.y);
+    ctx.fillStyle = `rgba(255,140,0,${b.life / 0.35 * 0.6})`;
+    ctx.beginPath(); ctx.ellipse(sx, sy, b.r * TW / 2, b.r * TH / 2, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  // objetos ordenados por profundidad
+  const list = [];
+  list.push({ d: BASE.x + BASE.y, f: drawBase });
+  for (const b of G.buildings) { list.push({ d: b.x + b.y, f: () => drawBuilding(b) }); list.push({ d: b.tx + b.ty, f: () => drawTable(b) }); }
+  for (const e of G.enemies) list.push({ d: e.x + e.y, f: () => drawEnemy(e) });
+  for (const c of G.drops) list.push({ d: c.x + c.y, f: () => { shadow(c.x, c.y, 0.12); const [sx, sy] = w2s(c.x, c.y, c.z + 4 + Math.sin(G.t * 5 + c.x) * 2); coinDisc(sx, sy, 6); } });
+  list.push({ d: G.player.x + G.player.y, f: drawPlayer });
+  list.sort((a, b) => a.d - b.d);
+  for (const o of list) o.f();
+  for (const s of G.shots) drawShot(s);
+  // monedas volando
+  for (const f of G.flyers) {
+    const k = f.t / f.dur;
+    const to = f.to.player ? { x: G.player.x, y: G.player.y, z: 40 + Math.min(G.player.coins, 50) * 2.2 } : f.to;
+    const x = f.fx + (to.x - f.fx) * k, y = f.fy + (to.y - f.fy) * k;
+    const z = f.fz + (to.z - f.fz) * k + Math.sin(k * Math.PI) * 40;
+    const [sx, sy] = w2s(x, y, z); coinDisc(sx, sy, 6);
+  }
+  for (const t of G.texts) { const [sx, sy] = w2s(t.x, t.y, t.z); ctx.globalAlpha = Math.min(1, t.life * 2); text(t.txt, sx, sy, t.size, t.color); ctx.globalAlpha = 1; }
+
+  // HUD
+  ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(0, 0, W, 44);
+  text('🪙 ' + fmt(G.player.coins), 14, 22, 18, '#ffd34d', 'left');
+  text('Oleada ' + G.wave + (G.wave ? '' : ''), W / 2, 14, 15, '#fff');
+  text('Siguiente en ' + Math.ceil(G.waveTimer) + 's  ·  Enemigos: ' + G.enemies.length, W / 2, 32, 11, '#ccc');
+  text('🏰 ' + Math.ceil(G.base.hp) + '/' + G.base.max, W - 14, 22, 16, '#8f8', 'right');
+
+  if (G.t < 10 && !G.over) {
+    ctx.globalAlpha = Math.min(1, (10 - G.t) / 2);
+    text('Muévete con flechas/WASD o arrastrando el dedo', W / 2, H - 50, 15);
+    text('Mata enemigos → recoge monedas → llévalas a las parcelas', W / 2, H - 28, 13, '#ffd34d');
+    ctx.globalAlpha = 1;
+  }
+
+  // joystick
+  if (joy.active) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(joy.ox, joy.oy, 50, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.beginPath(); ctx.arc(joy.ox + joy.dx * 50, joy.oy + joy.dy * 50, 20, 0, Math.PI * 2); ctx.fill();
+  }
+
+  if (G.over) {
+    ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fillRect(0, 0, W, H);
+    text('¡La base ha caído!', W / 2, H / 2 - 30, 32, '#f55');
+    text('Has llegado a la oleada ' + G.wave + ' con ' + G.buildings.length + ' torres', W / 2, H / 2 + 10, 16);
+    text('Toca la pantalla o pulsa una tecla para reintentar', W / 2, H / 2 + 40, 14, '#ccc');
+  }
+}
+
+// ============================================================
+//  BUCLE PRINCIPAL
+// ============================================================
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (!G.over) {
+    G.t += dt;
+    updateWaves(dt);
+    updatePlayer(dt);
+    updateEnemies(dt);
+    updateBuildings(dt);
+    updateShots(dt);
+  }
+  updateFx(dt);
+  render();
+  requestAnimationFrame(frame);
+}
+restart();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

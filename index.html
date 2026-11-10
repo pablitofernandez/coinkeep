@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Coinkeep</title>
+<link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+<div id="app"></div>
+<div id="hud">
+  <div class="hud-left"><span class="coin-icon"></span><span id="hud-coins">0</span></div>
+  <div class="hud-center"><div id="hud-wave">Oleada 0</div><div id="hud-sub"></div></div>
+  <div class="hud-right"><div id="hud-hp-text">60/60</div><div class="hp-bar"><div id="hud-hp"></div></div></div>
+  <div id="loading">Cargando…</div>
+  <button id="mute" class="hud-btn" aria-label="Silenciar sonido (M)" title="Sonido (M)">🔊</button>
+  <button id="music" class="hud-btn" aria-label="Música (N)" title="Música (N)">🎵</button>
+</div>
+<div id="help">Muévete con flechas/WASD o arrastrando el dedo<br><b>Mata enemigos → recoge monedas → llévalas a las parcelas</b></div>
+<div id="joy"><div id="joy-knob"></div></div>
+<div id="gameover" class="hidden">
+  <h1>¡La base ha caído!</h1>
+  <p id="go-text"></p>
+  <p class="dim">Toca la pantalla o pulsa una tecla para reintentar</p>
+</div>
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>

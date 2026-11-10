@@ -1,0 +1,12 @@
+3D models by Kenney (www.kenney.nl) — Creative Commons Zero (CC0)
+  chars/   Mini Characters        https://kenney.nl/assets/mini-characters
+  td/      Tower Defense Kit      https://kenney.nl/assets/tower-defense-kit
+  town/    Fantasy Town Kit       https://kenney.nl/assets/fantasy-town-kit
+  nature/  Nature Kit             https://kenney.nl/assets/nature-kit
+  castle/  Castle Kit             https://kenney.nl/assets/castle-kit
+  sounds/  Impact Sounds          https://kenney.nl/assets/impact-sounds
+
+KayKit Adventurers 2.0 (Kay Lousberg, www.kaylousberg.com) — Creative Commons Zero (CC0)
+  kaykit/  Rogue (jugador), daga, ballesta y animaciones Rig_Medium
+Ultimate Animated Animals (Quaternius, quaternius.com) — Creative Commons Zero (CC0)
+  animals/ Lobo

@@ -1,0 +1,11 @@
+node_modules/
+dist/
+logs/
+vendor/
+
+# sistema
+.DS_Store
+Thumbs.db
+*.log
+# ajustes locales de Claude Code
+.claude/settings.local.json
