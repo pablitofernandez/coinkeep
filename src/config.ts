@@ -123,7 +123,8 @@ export const TOWER_UPGRADE = {
 //  Decorado sólido del claro (árboles, rocas, tocones y troncos).
 //  Lo coloca la simulación al empezar cada partida y nadie lo puede atravesar.
 //  `solid`: círculos a escala 1, medidos de la base de cada modelo (en los árboles, solo el tronco,
-//  para poder pasar bajo la copa). Un círculo con `dz` va desplazado a lo largo del modelo (troncos).
+//  para poder pasar bajo la copa). Con `half` es una cápsula a lo largo del eje z del modelo
+//  (troncos caídos): con varios círculos en fila los zombis se quedaban atascados de frente.
 // ------------------------------------------------------------
 export interface PropKind { models: string[]; count: number; r0: number; r1: number; s0: number; s1: number; tilt?: number }
 export const PROP_KINDS: PropKind[] = [
@@ -133,13 +134,13 @@ export const PROP_KINDS: PropKind[] = [
   { models: ['rock_largeA', 'stone_largeA', 'rock_largeB', 'stone_largeC', 'rock_largeC', 'rock_smallA', 'rock_smallC'], count: 26, r0: WORLD.clearingRadius + 1.5, r1: WORLD.forestRadius - 0.5, s0: 0.9, s1: 1.8 },
   { models: ['stump_round', 'log'], count: 14, r0: WORLD.clearingRadius + 3, r1: WORLD.forestRadius - 0.5, s0: 1.2, s1: 1.7 },
 ];
-export const PROP_SOLID: Record<string, { r: number; dz?: number }[]> = {
+export const PROP_SOLID: Record<string, { r: number; half?: number }[]> = {
   tree_default: [{ r: 0.15 }], tree_oak: [{ r: 0.2 }], tree_fat: [{ r: 0.36 }], tree_cone: [{ r: 0.12 }],
   rock_largeA: [{ r: 0.46 }], stone_largeA: [{ r: 0.46 }], rock_largeB: [{ r: 0.46 }],
   stone_largeC: [{ r: 0.52 }], rock_largeC: [{ r: 0.52 }],
   rock_smallA: [{ r: 0.18 }],                       // rock_smallC es una piedrecita plana: se pisa
   stump_round: [{ r: 0.18 }],
-  log: [{ r: 0.12, dz: -0.22 }, { r: 0.12, dz: 0 }, { r: 0.12, dz: 0.22 }],
+  log: [{ r: 0.12, half: 0.23 }],
 };
 
 // Ayudantes: se desbloquean en su parcela y se mejoran pagándola otra vez.

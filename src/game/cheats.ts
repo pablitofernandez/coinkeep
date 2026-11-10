@@ -125,6 +125,32 @@ export function regenProps(G: GameState) {
 }
 
 /**
+ * Escena de la pantalla de título: castillo nivel 4, las cuatro torres más cercanas ya mejoradas,
+ * dos lobos y un pícaro con monedas. El castillo es invulnerable y no se ven parcelas.
+ * Los zombis los va sacando `showcaseTick`.
+ */
+export function showcase(G: GameState) {
+  G.dev.godCastle = true;
+  G.dev.pauseWaves = true;
+  G.wave = 4;
+  G.castleLevel = 4;
+  for (const pad of [...G.pads]) if ((pad.type === 'archer' || pad.type === 'cannon') && pad.unlock <= 3) finish(G, pad);
+  for (const pad of G.pads) if (pad.type === 'upgrade') { finish(G, pad); if (Math.random() < 0.6) finish(G, pad); }
+  levelUp(G, 'kennel', 2);
+  for (const pad of G.pads) pad.active = false;      // sin carteles de parcelas
+  G.player.coins = 24;
+  G.events.length = 0;                                // sin textos flotantes de «¡Torre!»
+}
+
+/** Mantiene unos cuantos zombis llegando al castillo en la pantalla de título. */
+export function showcaseTick(G: GameState) {
+  if (G.enemies.length < 9 && Math.random() < 0.03) spawnEnemy(G, Math.random() < 0.06);
+  G.player.coins = Math.min(G.player.coins, 40);      // que la pila no crezca hasta el cielo
+  for (const pad of G.pads) pad.active = false;
+  G.events = G.events.filter(e => e.type !== 'text');
+}
+
+/**
  * Movimiento del piloto automático (para la simulación rápida): va a por el enemigo más cercano
  * al castillo hasta tenerlo a tiro de ballesta; si no hay enemigos, vuelve a la puerta.
  */

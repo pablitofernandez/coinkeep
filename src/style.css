@@ -136,3 +136,41 @@ html, body {
   .dev-panel { width: 100vw; }
   .dev-btn { padding: 8px 10px; font-size: 13px; }
 }
+
+/* ---------- pantalla de título ---------- */
+#title {
+  position: fixed; inset: 0; z-index: 30; pointer-events: none;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 6px;
+  padding: max(5vh, 20px) 16px 16px; text-align: center; color: #fff;
+  /* viñeta: oscurece los bordes y deja ver la escena en el centro */
+  background: linear-gradient(rgba(10,14,8,.55), rgba(10,14,8,0) 38%), radial-gradient(ellipse at 50% 60%, rgba(0,0,0,0) 40%, rgba(10,14,8,.5) 100%);
+  animation: title-in .9s ease-out both;
+}
+#title.hidden { display: none; }
+#title.leaving { animation: title-out .45s ease-in both; }
+@keyframes title-in { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: none; } }
+@keyframes title-out { to { opacity: 0; transform: scale(1.06); } }
+
+.logo { margin: 0; line-height: 0; }
+.logo img {
+  width: min(92vw, 640px, 90vh); height: auto;   /* como mucho ~30% del alto (móvil apaisado) */
+  filter: drop-shadow(0 10px 18px rgba(0,0,0,.55));
+  animation: logo-float 4s ease-in-out infinite;
+}
+@keyframes logo-float { 50% { transform: translateY(-6px) rotate(-.6deg); } }
+.tagline {
+  margin: 4px 0 0; font-size: clamp(15px, 2.6vw, 24px); font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: #ffe9a8; text-shadow: 0 2px 4px rgba(0,0,0,.85), 0 0 10px rgba(0,0,0,.5);
+}
+.start {
+  position: absolute; bottom: max(7vh, 44px); left: 0; right: 0; margin: 0; font-size: clamp(15px, 2.2vw, 20px); font-weight: 800;
+  text-shadow: 0 2px 4px #000; animation: start-blink 1.4s ease-in-out infinite;
+}
+@keyframes start-blink { 50% { opacity: .35; } }
+.byline {
+  position: absolute; bottom: 14px; left: 0; right: 0; margin: 0;
+  font-size: 12px; opacity: .8; text-shadow: 0 1px 3px #000;
+}
+/* en la carga y en la portada no se ve el HUD (salvo el texto de «Cargando…», que vive dentro) */
+body.title-mode #hud { background: none; }
+body.title-mode #hud > :not(#loading), body.title-mode #help { display: none; }

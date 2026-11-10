@@ -68,10 +68,10 @@ export function placeProps(G: GameState) {
           rot: Math.random() * Math.PI * 2, scale: rand(kind.s0, kind.s1),
         };
         const parts = propSolids(prop);
-        const reach = Math.max(0.3, ...parts.map(s => Math.hypot(s.x - prop.x, s.y - prop.y) + s.r));
+        const reach = Math.max(0.3, ...parts.map(s => s.r + Math.hypot(s.hx ?? 0, s.hy ?? 0)));
         if (keep.some(k => Math.hypot(k.x - prop.x, k.y - prop.y) < k.r + reach)) continue;
         // entre obstáculos se deja hueco para pasar (al menos un cuerpo de zombi gordo)
-        if (G.solids.some(s => parts.some(p => Math.hypot(s.x - p.x, s.y - p.y) < s.r + p.r + 0.75))) continue;
+        if (G.solids.some(s => parts.some(p => solidGap(s, p) < 0.75))) continue;
         G.props.push(prop);
         G.solids.push(...parts);
         break;
@@ -84,9 +84,23 @@ export function placeProps(G: GameState) {
 function propSolids(p: Prop): Solid[] {
   // el modelo se gira `rot` en torno al eje vertical: su eje z local apunta a (sin rot, cos rot) en el plano
   const sx = Math.sin(p.rot), sy = Math.cos(p.rot);
-  return (PROP_SOLID[p.model] ?? []).map(c => ({
-    x: p.x + sx * (c.dz ?? 0) * p.scale, y: p.y + sy * (c.dz ?? 0) * p.scale, r: c.r * p.scale,
-  }));
+  return (PROP_SOLID[p.model] ?? []).map(c => c.half
+    ? { x: p.x, y: p.y, r: c.r * p.scale, hx: sx * c.half * p.scale, hy: sy * c.half * p.scale }
+    : { x: p.x, y: p.y, r: c.r * p.scale });
+}
+
+/** Punto del eje de un sólido más cercano a p (el centro si es un círculo; un punto del segmento si es una cápsula). */
+function solidCore(s: Solid, p: Vec): Vec {
+  if (!s.hx && !s.hy) return s;
+  const hx = s.hx ?? 0, hy = s.hy ?? 0;
+  const t = Math.max(-1, Math.min(1, ((p.x - s.x) * hx + (p.y - s.y) * hy) / (hx * hx + hy * hy)));
+  return { x: s.x + hx * t, y: s.y + hy * t };
+}
+
+/** Distancia entre dos sólidos (de borde a borde; aproximada para cápsulas). */
+function solidGap(a: Solid, b: Solid) {
+  const pa = solidCore(a, b), pb = solidCore(b, pa);
+  return Math.hypot(pa.x - pb.x, pa.y - pb.y) - a.r - b.r;
 }
 
 /**
@@ -96,12 +110,16 @@ function propSolids(p: Prop): Solid[] {
  */
 function avoidSolids(G: GameState, e: Vec, r: number, dirX = 0, dirY = 0, step = 0, side = 1) {
   for (const s of G.solids) {
-    const dx = e.x - s.x, dy = e.y - s.y, min = s.r + r;
-    if (Math.abs(dx) >= min || Math.abs(dy) >= min) continue;
+    // descarte rápido con la caja que envuelve al sólido
+    const ext = s.r + r + Math.abs(s.hx ?? 0) + Math.abs(s.hy ?? 0);
+    if (Math.abs(e.x - s.x) >= ext || Math.abs(e.y - s.y) >= ext) continue;
+    // en una cápsula se empuja desde el punto más cercano de su eje: así se resbala a lo largo del tronco
+    const q = solidCore(s, e);
+    const dx = e.x - q.x, dy = e.y - q.y, min = s.r + r;
     const d = Math.hypot(dx, dy);
     if (d >= min) continue;
     const nx = d > 1e-4 ? dx / d : 1, ny = d > 1e-4 ? dy / d : 0;
-    e.x = s.x + nx * min; e.y = s.y + ny * min;
+    e.x = q.x + nx * min; e.y = q.y + ny * min;
     // si el obstáculo le tapa el camino, rodea: paso lateral perpendicular a la normal
     const into = -(dirX * nx + dirY * ny);
     if (into > 0.2) {

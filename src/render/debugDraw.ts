@@ -38,7 +38,8 @@ export class DebugDraw {
   constructor(scene: THREE.Scene) {
     this.geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage));
     this.geo.setAttribute('color', new THREE.BufferAttribute(this.col, 3).setUsage(THREE.DynamicDrawUsage));
-    const mat = new THREE.LineBasicMaterial({ vertexColors: true, depthTest: false, transparent: true, opacity: 0.9 });
+    // toneMapped: false para que el filtro de color de la escena (ACES) no las deje grises
+    const mat = new THREE.LineBasicMaterial({ vertexColors: true, depthTest: false, transparent: true, opacity: 0.95, toneMapped: false });
     this.lines = new THREE.LineSegments(this.geo, mat);
     this.lines.frustumCulled = false;
     this.lines.renderOrder = 999;
@@ -54,7 +55,15 @@ export class DebugDraw {
     this.n = 0;
     const o = this.opts;
     if (o.colliders) {
-      for (const s of G.solids) this.circle(s.x, s.y, s.r, C.solid);
+      for (const s of G.solids) {
+        if (!s.hx && !s.hy) { this.circle(s.x, s.y, s.r, C.solid); continue; }
+        // cápsula: un círculo en cada punta y los dos lados rectos
+        const hx = s.hx ?? 0, hy = s.hy ?? 0, l = Math.hypot(hx, hy), px = -hy / l * s.r, py = hx / l * s.r;
+        this.circle(s.x + hx, s.y + hy, s.r, C.solid, 12);
+        this.circle(s.x - hx, s.y - hy, s.r, C.solid, 12);
+        this.seg(s.x - hx + px, s.y - hy + py, s.x + hx + px, s.y + hy + py, C.solid);
+        this.seg(s.x - hx - px, s.y - hy - py, s.x + hx - px, s.y + hy - py, C.solid);
+      }
       this.square(BASE.x, BASE.y, CASTLE_HALF, C.castle);
       this.circle(G.player.x, G.player.y, PLAYER_RADIUS, C.player);
       for (const e of G.enemies) this.circle(e.x, e.y, e.r, C.enemy);

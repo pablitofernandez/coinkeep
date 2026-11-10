@@ -72,7 +72,7 @@ Problemas conocidos al probar:
 
 ```
 src/
-  main.ts          bucle principal, botones del HUD (🔊 sonido = M, 🎵 música = N), pantalla de carga, globales de depuración
+  main.ts          bucle principal, pantalla de título (escena de exhibición con `showcase` y cámara orbitando: `view.orbit`), botones del HUD (🔊 sonido = M, 🎵 música = N), pantalla de carga, globales de depuración
   config.ts        TODO el equilibrio: mundo, jugador, oleadas, enemigos, parcelas, mejoras, ayudantes, forja
   input.ts         teclado y joystick táctil
   devlog.ts        envío de logs (ver arriba)
@@ -98,6 +98,9 @@ public/
 vendor/kenney/     zips y packs descomprimidos de Kenney (en .gitignore; es la fuente de modelos y sonidos)
 poc/               prototipo inicial en un solo HTML (histórico)
 logs/              logs de partidas (en .gitignore)
+art/               fuentes originales: Coinkeep.png (logo del usuario, fondo blanco; recortado a public/logo.webp)
+docs/screenshots/  capturas del README (desktop.jpg 800x450, mobile.jpg 375x812), sacadas del panel del navegador
+public/title.jpg   portada 1600x900 para README y og:image: escena renderizada a mano + logo dibujado en un canvas
 ```
 
 ### Flujo de datos
@@ -146,7 +149,7 @@ Notas:
 - Las paredes del Castle Kit van a lo largo del eje z, así que necesitan un giro extra de 90°.
 - **Decorado sólido:**
   - Los árboles sueltos, rocas («montañitas»), tocones y troncos del claro los coloca la **simulación** (`placeProps` en `sim.ts`, que da `G.props` y `G.solids`). La vista solo los dibuja (`syncProps`), así que cambian en cada partida.
-  - Las cantidades y los círculos de choque medidos de cada modelo están en `PROP_KINDS` y `PROP_SOLID` (`config.ts`). Los árboles chocan solo por el tronco.
+  - Las cantidades y los círculos de choque medidos de cada modelo están en `PROP_KINDS` y `PROP_SOLID` (`config.ts`). Los árboles chocan solo por el tronco. Los troncos caídos son **cápsulas** (`hx`, `hy` en `Solid`), no varios círculos en fila: con círculos los zombis que llegaban de frente se quedaban atascados.
   - `avoidSolids` saca a cualquiera de los obstáculos. Si va de frente, lo desliza de lado para que rodee. Lo usan el jugador, los zombis, los ayudantes y las monedas.
   - Flores, setas, matorrales y el bosque del borde siguen siendo decorativos, y la vista los coloca al azar.
 - El castillo dibujado ocupa un cuadrado de medio lado `CASTLE_HALF` = 1,46 (medido del modelo, en todos los niveles). Todas las colisiones con el castillo (jugador, zombis, ayudantes, monedas, navegación) usan ese valor más el radio de cada uno. `BASE_HALF` (1,1) solo se usa para colocar parcelas y para el alcance de las torres.

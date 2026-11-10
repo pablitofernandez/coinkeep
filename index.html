@@ -4,9 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Coinkeep</title>
+<meta name="description" content="Tower defense isométrico para el navegador: defiende el castillo y guarda cada moneda.">
+<!-- vista previa al compartir el enlace -->
+<meta property="og:title" content="Coinkeep">
+<meta property="og:description" content="Tower defense isométrico para el navegador: defiende el castillo y guarda cada moneda.">
+<meta property="og:image" content="https://pablitofernandez.github.io/coinkeep/title.jpg">
+<meta property="og:url" content="https://pablitofernandez.github.io/coinkeep/">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="stylesheet" href="/src/style.css">
 </head>
-<body>
+<body class="title-mode">
 <div id="app"></div>
 <div id="hud">
   <div class="hud-left"><span class="coin-icon"></span><span id="hud-coins">0</span></div>
@@ -18,6 +25,12 @@
 </div>
 <div id="help">Muévete con flechas/WASD o arrastrando el dedo<br><b>Mata enemigos → recoge monedas → llévalas a las parcelas</b></div>
 <div id="joy"><div id="joy-knob"></div></div>
+<div id="title" class="hidden">
+  <h1 class="logo"><img src="/logo.webp" alt="Coinkeep" width="1200" height="400"></h1>
+  <p class="tagline">Defiende el castillo · Guarda cada moneda</p>
+  <p class="start">Toca la pantalla o pulsa una tecla para jugar</p>
+  <p class="byline">Pablo Fernández · <i>vibe coded</i> con Claude Opus 5.5</p>
+</div>
 <div id="gameover" class="hidden">
   <h1>¡La base ha caído!</h1>
   <p id="go-text"></p>

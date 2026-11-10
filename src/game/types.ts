@@ -92,8 +92,11 @@ export interface Point3 { x: number; y: number; z: number }
 
 /** Elemento de decorado colocado por la simulación (la vista lo dibuja con ese modelo, giro y escala). */
 export interface Prop extends Vec { model: string; rot: number; scale: number }
-/** Círculo sólido (tronco de árbol, roca…): nadie lo puede atravesar. */
-export interface Solid extends Vec { r: number }
+/**
+ * Zona sólida (tronco de árbol, roca, tronco caído…): nadie la puede atravesar.
+ * Es un círculo de radio r, o una cápsula si tiene (hx, hy): el segmento centro ± (hx, hy) engordado r.
+ */
+export interface Solid extends Vec { r: number; hx?: number; hy?: number }
 
 export type SfxName =
   | 'sword' | 'bow' | 'arrow' | 'cannon' | 'boom' | 'die' | 'bossDie' | 'bite'

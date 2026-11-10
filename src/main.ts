@@ -1,4 +1,4 @@
-import { autopilotDir } from './game/cheats';
+import { autopilotDir, showcase, showcaseTick } from './game/cheats';
 import { createGame, step } from './game/sim';
 import type { GameState, Vec } from './game/types';
 import { Sound } from './audio';
@@ -16,10 +16,30 @@ loading.remove();
 
 const view = new View($('app'));
 const input = new Input(document.body, $('joy'), $('joy-knob'));
-let G: GameState = createGame();
-view.reset(G);
 const devlog = new DevLog();
-devlog.start();
+
+// --- pantalla de título: de fondo, una partida de exhibición (torres, lobos, zombis) con la cámara girando
+let G: GameState = createGame();
+showcase(G);
+view.reset(G);
+let inTitle = true;
+document.body.classList.add('title-mode');
+$('title').classList.remove('hidden');
+view.orbit = Math.PI / 4;
+view.setZoom(0.85);
+
+/** Sale de la pantalla de título y empieza la partida de verdad. */
+function startGame() {
+  if (!inTitle) return;
+  inTitle = false;
+  const title = $('title');
+  title.classList.add('leaving');
+  setTimeout(() => title.classList.add('hidden'), 450);
+  document.body.classList.remove('title-mode');
+  view.orbit = null;
+  view.setZoom(1);
+  restart();
+}
 
 // --- sonido (botón 🔊 o tecla M)
 const sound = new Sound();
@@ -48,7 +68,7 @@ function restart() {
   devlog.start();
   $('gameover').classList.add('hidden');
 }
-input.onAny = () => { if (G.over) restart(); };
+input.onAny = () => { if (inTitle) startGame(); else if (G.over) restart(); };
 
 /**
  * Convierte la dirección de pantalla en dirección de suelo.
@@ -109,6 +129,14 @@ function frame(now: number) {
   last = now;
   fpsFrames++;
   if (now - fpsT >= 500) { fps = fpsFrames * 1000 / (now - fpsT); fpsFrames = 0; fpsT = now; }
+  if (inTitle) {
+    // portada: la escena de exhibición sigue viva (sin sonido, sin HUD y sin registro)
+    view.orbit = (view.orbit ?? 0) + dt * 0.1;
+    acc += dt;
+    while (acc >= FIXED) { step(G, FIXED, { x: 0, y: 0 }); showcaseTick(G); acc -= FIXED; }
+    view.render(G, dt);
+    return;
+  }
   const dir = screenToWorld(input.screenDir());
   let simDt = dt * time.scale;
   if (time.turboTo > 0) turbo();
@@ -165,6 +193,6 @@ Object.assign(window, {
 // --- menú de desarrollador (solo con `npm run dev`; F1 o º, o tres toques en el contador de oleada)
 if (import.meta.env.DEV) {
   import('./dev/panel').then(m => m.initDevPanel({
-    game: () => G, view, sound, devlog, time, restart, fps: () => fps,
+    game: () => G, view, sound, devlog, time, restart: () => (inTitle ? startGame() : restart()), fps: () => fps,
   }));
 }

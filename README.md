@@ -1,5 +1,7 @@
 # 🪙 Coinkeep
 
+[![Coinkeep title screen](public/title.jpg)](https://pablitofernandez.github.io/coinkeep/)
+
 **[▶ Play it in your browser](https://pablitofernandez.github.io/coinkeep/)**. It works on desktop and mobile, with no install.
 
 An isometric *tower defense* game for the browser. You play a rogue defending a castle from waves of zombies. Slay enemies, carry an ever-growing stack of coins on your back, and spend it by standing on build plots. Raise towers, upgrade them, forge better weapons, and hire wolves and peasants to help you.
@@ -7,6 +9,15 @@ An isometric *tower defense* game for the browser. You play a rogue defending a 
 > **Vibe coded.** This game was made by **Pablo Fernández** in conversation with **Claude Opus 5.5** (Anthropic), using Claude Code. Pablo directed the design, art style, balancing and playtesting. Claude wrote practically all of the code, the synthesized music and the sound effects.
 >
 > The game's interface is in Spanish.
+
+## Screenshots
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/desktop.jpg" alt="Coinkeep on desktop: the castle with archer towers, a cannon, wolves and a peasant's hut while zombies close in" width="640"><br><sub>Desktop</sub></td>
+    <td align="center"><img src="docs/screenshots/mobile.jpg" alt="Coinkeep on a phone in portrait mode, with a boss zombie approaching the castle" width="210"><br><sub>Mobile</sub></td>
+  </tr>
+</table>
 
 ## How to play
 

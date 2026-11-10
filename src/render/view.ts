@@ -784,7 +784,22 @@ export class View {
     }
   }
 
+  /** Pantalla de título: ángulo de la cámara girando alrededor del castillo (null = cámara normal de juego). */
+  orbit: number | null = null;
+
   private updateCamera(G: GameState, dt: number) {
+    if (this.orbit !== null) {
+      // misma altura e inclinación que en el juego, girando alrededor de un punto algo detrás del castillo
+      // (así el castillo queda en la mitad de abajo de la pantalla, por debajo del logo)
+      const r = Math.hypot(CAM_OFFSET.x, CAM_OFFSET.z), a = this.orbit;
+      const tx = BASE.x - Math.sin(a) * 3, tz = BASE.y - Math.cos(a) * 3;
+      this.camTarget.set(tx, 0, tz);
+      this.camera.position.set(tx + Math.sin(a) * r, CAM_OFFSET.y, tz + Math.cos(a) * r);
+      this.camera.lookAt(tx, 0, tz);
+      this.sun.position.set(tx - 6, 16, tz + 4);
+      this.sun.target.position.set(tx, 0, tz);
+      return;
+    }
     const k = Math.min(1, dt * 6);
     this.camTarget.x += (G.player.x - this.camTarget.x) * k;
     this.camTarget.z += (G.player.y - this.camTarget.z) * k;
