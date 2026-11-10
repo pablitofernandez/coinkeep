@@ -123,6 +123,7 @@ Para añadir un sonido:
 |---|---|---|
 | KayKit Adventurers 2.0 | `kaykit` | **jugador**: `Rogue` (pícaro) con `dagger` en `handslotr` y `crossbow_1handed` en `handslotl`; animaciones de `Rig_Medium_General` y `Rig_Medium_MovementBasic` (`Idle_A`, `Running_A`, `Throw`…). Escala 0.46 |
 | Ultimate Animated Animals (Quaternius) | `animals` | `wolf`, el **lobo** (antes perro; en el código sigue siendo `dog`/`kennel`). Animaciones `Idle`, `Walk`, `Gallop`, `Attack`. Escala 0.19 |
+| Animated Monster Pack (Quaternius) | `monsters` | `skeleton` (esqueleto corredor) y `bat` (murciélago). Venían solo en FBX: convertidos a GLB con `tools/fbx2glb.mjs` (FBXLoader + GLTFExporter; los colores hay que pasarlos de lineal a sRGB una vez). Animaciones con prefijo de armadura: `SkeletonArmature\|Skeleton_Running`, `BatArmature\|Bat_Flying`… Escalas 0.0021 y 0.0016 |
 | Mini Characters | `chars` | zombi (enemigo; el jefe es el mismo zombi a escala 2.3), `character-male-b` (peón, aldeano barbudo) |
 | Tower Defense Kit | `td` | torres apiladas por piezas según nivel, ballesta y cañón giratorios, proyectiles, cristales |
 | Fantasy Town Kit | `town` | cabaña del peón (paredes, tejado, chimenea, estandarte, farol) |
@@ -160,6 +161,15 @@ Notas:
 - Las torres llegan como mucho a 2 piezas intermedias: si son más altas, tapan al jugador.
 
 ---
+
+## Tipos de enemigo
+
+En `ENEMY_KINDS` (`config.ts`); multiplican la vida, velocidad y botín del zombi de la oleada. `pickEnemyKind` reparte la oleada por proporciones que crecen con la oleada.
+- **Zombi**: el normal. El jefe es siempre un zombi enorme.
+- **Esqueleto** (corredor, desde la 3): la mitad de vida y un 75 % más rápido.
+- **Murciélago** (desde la 6): vuela (`fly`), pasa por encima del decorado y no choca con los de tierra. **El cañón no lo apunta ni le afecta su explosión.** Las flechas apuntan a su altura (`Shot.tz`).
+- **Mago** (KayKit `Mage` con `staff`, desde la 8): más vida, lento; cada 3,2 s cura un 18 % a los que tiene cerca (`SHAMAN`). Destello verde al curar y sonido `heal`.
+- Cada tipo tiene su sonido de muerte (`DIE_SOUND` en `audio.ts`). Los logs traen `spawnedKind` por oleada. El menú de desarrollo deja elegir el tipo al sacar enemigos.
 
 ## Audio
 

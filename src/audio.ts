@@ -4,7 +4,7 @@
 //  Escucha los eventos de la simulación y los convierte en efectos.
 // ============================================================
 import { BASE, WORLD } from './config';
-import type { GameEvent, GameState, SfxName } from './game/types';
+import type { EnemyKind, GameEvent, GameState, SfxName } from './game/types';
 import { Music } from './music';
 
 /** Grupos de muestras en public/sounds (5 variantes de cada uno: nombre_0..4.mp3). */
@@ -20,9 +20,11 @@ type Wave = OscillatorType;
 
 /** Tiempo mínimo entre dos reproducciones del mismo sonido (evita saturar con 30 torres). */
 const MIN_GAP: Partial<Record<SfxName, number>> = {
-  sword: 0.08, bow: 0.08, arrow: 0.07, cannon: 0.12, boom: 0.1, die: 0.05, bite: 0.1,
+  sword: 0.08, bow: 0.08, arrow: 0.07, cannon: 0.12, boom: 0.1, die: 0.05, dieBones: 0.05, dieBat: 0.05, heal: 0.3, bite: 0.1,
   coin: 0.06, pay: 0.07, baseHit: 0.25,
 };
+/** Sonido de muerte de cada tipo de enemigo. */
+const DIE_SOUND: Record<EnemyKind, SfxName> = { zombie: 'die', shaman: 'die', runner: 'dieBones', bat: 'dieBat' };
 const MAX_VOICES = 14;           // sonidos simultáneos como mucho
 const HEAR_RANGE = 14;           // a partir de esta distancia al jugador no se oye
 
@@ -123,7 +125,7 @@ export class Sound {
       switch (ev.type) {
         case 'sfx': this.play(ev.name, this.volAt(G, ev.x, ev.y)); break;
         case 'boom': this.play('boom', this.volAt(G, ev.x, ev.y)); break;
-        case 'enemyDied': this.play(ev.boss ? 'bossDie' : 'die', this.volAt(G, ev.x, ev.y)); break;
+        case 'enemyDied': this.play(ev.boss ? 'bossDie' : DIE_SOUND[ev.kind], this.volAt(G, ev.x, ev.y)); break;
         case 'built': this.play('build', 1); break;
         case 'towerUpgraded': case 'padUpgraded': this.play('upgrade', 1); break;
         case 'baseHit': this.play('baseHit', 0.8); break;
@@ -188,6 +190,23 @@ export class Sound {
         // gruñido ronco del zombi que se apaga + el cuerpo cayendo al suelo
         this.groan(now, 0.32 * r, 0.11 * vol, 150 * r);
         if (!this.sample('impactSoft_medium', 0.45 * vol, 0.7 * r, now + 0.22)) this.noiseHit(now + 0.22, 0.12, 300, 'lowpass', 0.25 * vol);
+        break;
+      case 'dieBones':
+        // esqueleto: huesos que se desmoronan (tablones agudos encadenados)
+        for (let i = 0; i < 3; i++) {
+          const t = now + i * 0.06 + Math.random() * 0.02;
+          if (!this.sample('impactPlank_medium', (0.32 - i * 0.07) * vol, (1.9 + i * 0.25) * r, t)) this.noiseHit(t, 0.04, 2500, 'bandpass', 0.12 * vol, 4);
+        }
+        break;
+      case 'dieBat':
+        // murciélago: chillido agudo que cae + golpecito al caer
+        this.tone(now, 'sine', 2600 * r, 1300 * r, 0.12, 0.07 * vol);
+        this.tone(now + 0.05, 'triangle', 2100 * r, 900 * r, 0.1, 0.05 * vol);
+        if (!this.sample('impactSoft_medium', 0.3 * vol, 1.5 * r, now + 0.18)) this.noiseHit(now + 0.18, 0.06, 900, 'lowpass', 0.12 * vol);
+        break;
+      case 'heal':
+        // hechizo de curación del mago: brillo suave ascendente
+        this.arp(now, [880 * r, 1109 * r, 1319 * r, 1760 * r], 0.05, 'sine', 0.06 * vol);
         break;
       case 'bossDie':
         this.tone(now, 'sawtooth', 300, 40, 0.8, 0.2 * vol);

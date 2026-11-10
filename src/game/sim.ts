@@ -5,9 +5,9 @@
 import {
   BASE, BASE_HALF, BASE_HP, CASTLE_HALF, PLAYER_RADIUS, FORGE_MULT, HELPERS, PAD_DEFS, PAD_INFO, PLAYER, PROP_KINDS, PROP_SOLID,
   REPEAT_COST_MULT, REPEAT_COST_MULT_BY,
-  TOWER_CASTLE_MARGIN, TOWER_STATS, TOWER_UPGRADE, WAVES, WORLD, enemyStats,
+  TOWER_CASTLE_MARGIN, TOWER_STATS, TOWER_UPGRADE, WAVES, WORLD, enemyStats, ENEMY_KINDS, SHAMAN, pickEnemyKind,
 } from '../config';
-import type { Building, Drop, Enemy, GameState, Helper, HelperKind, KillSource, Pad, Prop, SfxName, Solid, Vec } from './types';
+import type { Building, Drop, Enemy, EnemyKind, GameState, Helper, HelperKind, KillSource, Pad, Prop, SfxName, Solid, Vec } from './types';
 import { emptyStats, logWave } from './stats';
 
 let nextId = 1;
@@ -150,14 +150,17 @@ function updateUnlocks(G: GameState) {
 //  Oleadas
 // ------------------------------------------------------------
 /** Saca un enemigo. Por defecto sale del bosque, en un punto al azar del círculo que rodea la zona de juego. */
-export function spawnEnemy(G: GameState, boss: boolean, at?: Vec) {
+export function spawnEnemy(G: GameState, boss: boolean, at?: Vec, kind?: EnemyKind) {
   G.stats.spawned++;
+  const k: EnemyKind = boss ? 'zombie' : kind ?? pickEnemyKind(Math.max(1, G.wave));
+  const tag = boss ? 'boss' : k;
+  G.stats.spawnedKind[tag] = (G.stats.spawnedKind[tag] ?? 0) + 1;
   const a = Math.random() * Math.PI * 2;
   const x = at ? at.x : BASE.x + Math.cos(a) * WORLD.spawnRadius, y = at ? at.y : BASE.y + Math.sin(a) * WORLD.spawnRadius;
-  const st = enemyStats(Math.max(1, G.wave), boss);
+  const st = enemyStats(Math.max(1, G.wave), boss, k);
   st.hp = st.maxHp = Math.max(1, Math.round(st.hp * G.dev.enemyHp));
   G.enemies.push({
-    id: uid(), x, y, ...st, boss,
+    id: uid(), x, y, ...st, boss, kind: k, fly: ENEMY_KINDS[k].fly, cast: SHAMAN.firstCast, healed: 0,
     atk: 0.5, dead: false, attacking: false, lunge: 0, hit: 0,
   });
 }
@@ -196,7 +199,7 @@ function updateWaves(G: GameState, dt: number) {
 export function killEnemy(G: GameState, e: Enemy, byTower: Building | null, source: KillSource) {
   e.dead = true;
   G.stats.kills[source]++;
-  G.events.push({ type: 'enemyDied', x: e.x, y: e.y, boss: e.boss });
+  G.events.push({ type: 'enemyDied', x: e.x, y: e.y, boss: e.boss, kind: e.kind });
   if (byTower) {
     byTower.table += e.value;
     G.events.push({ type: 'coinFly', from: { x: e.x, y: e.y, z: 0.4 }, to: { x: byTower.tx, y: byTower.ty, z: 0.5 } });
@@ -219,13 +222,30 @@ function damageEnemy(G: GameState, e: Enemy, dmg: number, tower: Building | null
   if (e.hp <= 0) killEnemy(G, e, tower, source);
 }
 
+/** Mago: cada pocos segundos cura a los enemigos que tiene cerca (y a sí mismo). */
+function shamanCast(G: GameState, e: Enemy, dt: number) {
+  e.cast -= dt;
+  if (e.cast > 0) return;
+  e.cast = SHAMAN.every;
+  let any = false;
+  for (const o of G.enemies) {
+    if (o.dead || o.hp >= o.maxHp || dist(o, e) > SHAMAN.range) continue;
+    o.hp = Math.min(o.maxHp, o.hp + Math.ceil(o.maxHp * SHAMAN.pct));
+    o.healed = 0.45;
+    any = true;
+  }
+  if (any) { e.healed = 0.45; e.lunge = 0.6; sfx(G, 'heal', e.x, e.y); }
+}
+
 function updateEnemies(G: GameState, dt: number) {
   const speedMult = G.dev.enemySpeed;
   for (const e of G.enemies) {
     if (e.dead) continue;
     e.hit = Math.max(0, e.hit - dt);
     e.lunge = Math.max(0, e.lunge - dt);
+    e.healed = Math.max(0, e.healed - dt);
     if (G.dev.freeze) { e.attacking = false; continue; }
+    if (e.kind === 'shaman') shamanCast(G, e, dt);
     const dx = BASE.x - e.x, dy = BASE.y - e.y, d = Math.hypot(dx, dy);
     if (Math.max(Math.abs(dx), Math.abs(dy)) < CASTLE_HALF + e.r + 0.05) {
       e.attacking = true;
@@ -245,13 +265,14 @@ function updateEnemies(G: GameState, dt: number) {
     const sp = e.speed * speedMult;
     e.x += dx / d * sp * dt;
     e.y += dy / d * sp * dt;
-    // árboles y rocas: los rodean (cada uno por su lado preferido, para que no se amontonen)
-    avoidSolids(G, e, e.r * 0.8, dx / d, dy / d, sp * dt, e.id % 2 ? 1 : -1);
+    // árboles y rocas: los rodean (cada uno por su lado preferido, para que no se amontonen); los que vuelan pasan por encima
+    if (!e.fly) avoidSolids(G, e, e.r * 0.8, dx / d, dy / d, sp * dt, e.id % 2 ? 1 : -1);
   }
   // separación simple
   const es = G.enemies;
   for (let i = 0; i < es.length; i++) for (let j = i + 1; j < es.length; j++) {
     const a = es[i], b = es[j];
+    if (!a.fly !== !b.fly) continue;   // los que vuelan no chocan con los de tierra
     const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy), min = a.r + b.r;
     if (d > 0 && d < min) {
       const push = (min - d) / 2;
@@ -261,7 +282,7 @@ function updateEnemies(G: GameState, dt: number) {
   }
   // que nadie se meta dentro de la base ni de un obstáculo al empujarse
   for (const e of es) {
-    avoidSolids(G, e, e.r * 0.8);
+    if (!e.fly) avoidSolids(G, e, e.r * 0.8);
     const ex = e.x - BASE.x, ey = e.y - BASE.y, lim = CASTLE_HALF + e.r;
     if (Math.abs(ex) < lim && Math.abs(ey) < lim) {
       if (Math.abs(ex) > Math.abs(ey)) e.x = BASE.x + Math.sign(ex || 1) * lim;
@@ -320,7 +341,7 @@ function updatePlayer(G: GameState, dt: number, dir: Vec) {
       const d = dist(p, best);
       G.shots.push({
         id: uid(), type: 'archer', x: p.x, y: p.y, z: 0.75, z0: 0.75, dist0: d,
-        target: best, tx: best.x, ty: best.y,
+        target: best, tx: best.x, ty: best.y, tz: 0.4 + best.fly,
         speed: PLAYER.bow.speed, dmg: p.bowDmg * G.towerMult * G.dev.playerDmg, splash: 0, from: null, done: false,
       });
       p.weapon = 'bow';
@@ -524,6 +545,7 @@ function updateBuildings(G: GameState, dt: number) {
     let best: Enemy | null = null, bd = Infinity;
     let backup: Enemy | null = null, bk = Infinity;
     for (const e of G.enemies) {
+      if (e.fly && b.type === 'cannon') continue;   // las balas de cañón no alcanzan a los que vuelan
       const d = dist(b, e), db = Math.hypot(e.x - BASE.x, e.y - BASE.y);
       if (d < st.range) { if (db < bd) { bd = db; best = e; } }
       else if (e.attacking && d < castleReach && db < bk) { bk = db; backup = e; }
@@ -536,7 +558,7 @@ function updateBuildings(G: GameState, dt: number) {
     sfx(G, b.type === 'archer' ? 'arrow' : 'cannon', b.x, b.y);
     G.shots.push({
       id: uid(), type: b.type, x: b.x, y: b.y, z: st.muzzle, z0: st.muzzle, dist0: am,
-      target: best, tx: best.x, ty: best.y,
+      target: best, tx: best.x, ty: best.y, tz: 0.4 + best.fly,
       speed: st.speed, dmg: st.dmg, splash: st.splash, from: b, done: false,
     });
   }
@@ -544,18 +566,18 @@ function updateBuildings(G: GameState, dt: number) {
 
 function updateShots(G: GameState, dt: number) {
   for (const s of G.shots) {
-    if (s.target && !s.target.dead) { s.tx = s.target.x; s.ty = s.target.y; }
+    if (s.target && !s.target.dead) { s.tx = s.target.x; s.ty = s.target.y; s.tz = 0.4 + s.target.fly; }
     const dx = s.tx - s.x, dy = s.ty - s.y, d = Math.hypot(dx, dy);
     const step = s.speed * dt;
     // altura: interpolación + arco parabólico (los cañonazos van más altos)
     const k = 1 - Math.min(1, d / Math.max(s.dist0, 0.01));
     const arc = s.type === 'cannon' ? 1.6 : 0.4;
-    s.z = s.z0 + (0.4 - s.z0) * k + Math.sin(k * Math.PI) * arc;
+    s.z = s.z0 + (s.tz - s.z0) * k + Math.sin(k * Math.PI) * arc;
     if (d <= step) {
       s.done = true;
       if (s.splash > 0) {
         G.events.push({ type: 'boom', x: s.tx, y: s.ty, r: s.splash });
-        for (const e of G.enemies) if (Math.hypot(e.x - s.tx, e.y - s.ty) < s.splash) damageEnemy(G, e, s.dmg, s.from, s.from ? s.from.type : 'bow');
+        for (const e of G.enemies) if (!e.fly && Math.hypot(e.x - s.tx, e.y - s.ty) < s.splash) damageEnemy(G, e, s.dmg, s.from, s.from ? s.from.type : 'bow');
       } else if (s.target && !s.target.dead) {
         damageEnemy(G, s.target, s.dmg, s.from, s.from ? s.from.type : 'bow');
       }

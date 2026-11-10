@@ -40,8 +40,15 @@ export interface Player extends Vec {
 
 export type Weapon = 'sword' | 'bow';
 
+/** Tipos de enemigo: zombi (normal), esqueleto (corredor), murciélago (vuela) y mago (cura a los demás). */
+export type EnemyKind = 'zombie' | 'runner' | 'bat' | 'shaman';
+
 export interface Enemy extends Vec {
   id: number;
+  kind: EnemyKind;
+  fly: number;                 // altura de vuelo (0 = por el suelo)
+  cast: number;                // mago: segundos hasta su próximo hechizo de curación
+  healed: number;              // destello verde al ser curado
   hp: number; maxHp: number;
   speed: number; value: number;
   dmg: number; atkRate: number; atk: number;
@@ -82,7 +89,7 @@ export interface Shot extends Vec {
   type: TowerType;
   z: number; z0: number; dist0: number;
   target: Enemy | null;
-  tx: number; ty: number;
+  tx: number; ty: number; tz: number;   // punto de impacto (tz: altura, más alta si el objetivo vuela)
   speed: number; dmg: number; splash: number;
   from: Building | null;           // null = flecha del jugador (el botín cae al suelo)
   done: boolean;
@@ -99,7 +106,7 @@ export interface Prop extends Vec { model: string; rot: number; scale: number }
 export interface Solid extends Vec { r: number; hx?: number; hy?: number }
 
 export type SfxName =
-  | 'sword' | 'bow' | 'arrow' | 'cannon' | 'boom' | 'die' | 'bossDie' | 'bite'
+  | 'sword' | 'bow' | 'arrow' | 'cannon' | 'boom' | 'die' | 'dieBones' | 'dieBat' | 'bossDie' | 'bite' | 'heal'
   | 'coin' | 'pay' | 'build' | 'upgrade' | 'baseHit' | 'wave' | 'boss' | 'waveClear' | 'gameOver';
 
 export type GameEvent =
@@ -107,7 +114,7 @@ export type GameEvent =
   | { type: 'text'; x: number; y: number; text: string; color: string; size: number }
   | { type: 'coinFly'; from: Point3; to: Point3 | 'player' }
   | { type: 'boom'; x: number; y: number; r: number }
-  | { type: 'enemyDied'; x: number; y: number; boss: boolean }
+  | { type: 'enemyDied'; x: number; y: number; boss: boolean; kind: EnemyKind }
   | { type: 'built'; id: number }
   | { type: 'towerUpgraded'; id: number }
   | { type: 'baseHit' }
@@ -167,6 +174,7 @@ export interface Counters {
   kills: Record<KillSource, number>;
   baseDamage: number;
   spawned: number;
+  spawnedKind: Partial<Record<EnemyKind | 'boss', number>>;
 }
 
 /** Foto de una oleada (los valores de contadores son lo ocurrido SOLO en esa oleada). */

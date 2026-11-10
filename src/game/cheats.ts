@@ -5,7 +5,7 @@
 // ============================================================
 import { BASE, CASTLE_HALF, PLAYER, TOWER_UPGRADE } from '../config';
 import { completePad, killEnemy, placeProps, spawnEnemy } from './sim';
-import type { GameState, Pad, PadType, Vec } from './types';
+import type { EnemyKind, GameState, Pad, PadType, Vec } from './types';
 
 export const mark = (G: GameState) => { G.cheated = true; };
 
@@ -14,16 +14,16 @@ export const mark = (G: GameState) => { G.cheated = true; };
 // ------------------------------------------------------------
 
 /** Saca `n` enemigos: desde el bosque (repartidos) o en un anillo cerca del jugador. */
-export function spawnMany(G: GameState, n: number, where: 'forest' | 'near', boss = false) {
+export function spawnMany(G: GameState, n: number, where: 'forest' | 'near', boss = false, kind?: EnemyKind) {
   mark(G);
   const p = G.player;
   for (let i = 0; i < n; i++) {
-    if (where === 'forest') { spawnEnemy(G, boss); continue; }
+    if (where === 'forest') { spawnEnemy(G, boss, undefined, kind); continue; }
     const a = Math.random() * Math.PI * 2, r = 3 + Math.random() * 2.5;
     let at: Vec = { x: p.x + Math.cos(a) * r, y: p.y + Math.sin(a) * r };
     // que no aparezcan dentro del castillo
     if (Math.max(Math.abs(at.x - BASE.x), Math.abs(at.y - BASE.y)) < CASTLE_HALF + 0.5) at = { x: BASE.x + Math.cos(a) * 4, y: BASE.y + Math.sin(a) * 4 };
-    spawnEnemy(G, boss, at);
+    spawnEnemy(G, boss, at, kind);
   }
 }
 
@@ -41,7 +41,7 @@ export function nextWaveNow(G: GameState) { mark(G); G.waveTimer = 0; }
 export function killAll(G: GameState, withCoins: boolean) {
   mark(G);
   if (withCoins) for (const e of G.enemies) killEnemy(G, e, null, 'sword');
-  else for (const e of G.enemies) { e.dead = true; G.events.push({ type: 'enemyDied', x: e.x, y: e.y, boss: e.boss }); }
+  else for (const e of G.enemies) { e.dead = true; G.events.push({ type: 'enemyDied', x: e.x, y: e.y, boss: e.boss, kind: e.kind }); }
   G.enemies = G.enemies.filter(e => !e.dead);
   G.spawnLeft = 0;
 }
@@ -182,6 +182,7 @@ export function liveWave(G: GameState) {
     kills: sub(s.kills, l.kills),
     baseDamage: s.baseDamage - l.baseDamage,
     spawned: s.spawned - l.spawned,
+    spawnedKind: sub(s.spawnedKind, l.spawnedKind),
     seconds: Math.round(G.t - s.lastT),
   };
 }

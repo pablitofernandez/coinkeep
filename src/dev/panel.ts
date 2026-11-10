@@ -7,7 +7,8 @@
 import type { Sound } from '../audio';
 import type { DevLog } from '../devlog';
 import * as cheat from '../game/cheats';
-import type { DevFlags, GameState, PadType, SfxName } from '../game/types';
+import { ENEMY_KINDS } from '../config';
+import type { DevFlags, EnemyKind, GameState, PadType, SfxName } from '../game/types';
 import type { TimeControl } from '../main';
 import type { View } from '../render/view';
 
@@ -24,7 +25,7 @@ export interface DevContext {
 
 const SFX: [SfxName, string][] = [
   ['sword', 'Espada'], ['bow', 'Ballesta'], ['arrow', 'Flecha torre'], ['cannon', 'Cañón'], ['boom', 'Explosión'],
-  ['die', 'Muerte zombi'], ['bossDie', 'Muerte jefe'], ['bite', 'Mordisco'], ['coin', 'Moneda'], ['pay', 'Pagar'],
+  ['die', 'Muerte zombi'], ['dieBones', 'Muerte esqueleto'], ['dieBat', 'Muerte murciélago'], ['heal', 'Curación del mago'], ['bossDie', 'Muerte jefe'], ['bite', 'Mordisco'], ['coin', 'Moneda'], ['pay', 'Pagar'],
   ['build', 'Construir'], ['upgrade', 'Mejorar'], ['baseHit', 'Golpe castillo'], ['wave', 'Oleada'], ['boss', 'Jefe'],
   ['waveClear', 'Oleada superada'], ['gameOver', 'Derrota'],
 ];
@@ -34,6 +35,7 @@ const NAMES: Record<string, string> = {
   ground: 'suelo', table: 'mesas', dog: 'lobos', peon: 'peones',
   sword: 'espada', bow: 'ballesta', archer: 'arqueras', cannon: 'cañones',
   power: 'fuerza', repair: 'reparar', forge: 'forja', kennel: 'lobos', upgrade: 'mejoras',
+  zombie: 'zombis', runner: 'esqueletos', bat: 'murciélagos', shaman: 'magos', boss: 'jefes',
 };
 
 const REPEATABLE: [PadType, string][] = [
@@ -122,10 +124,17 @@ export function initDevPanel(ctx: DevContext) {
   // ======================================================
   {
     const s = section('🧟 Enemigos y oleadas', true);
-    let r = row(s, 'Zombis del bosque');
-    for (const n of [10, 50, 200]) button(r, '+' + n, () => cheat.spawnMany(G(), n, 'forest'));
-    r = row(s, 'Zombis cerca de ti');
-    for (const n of [10, 50, 200]) button(r, '+' + n, () => cheat.spawnMany(G(), n, 'near'));
+    let r = row(s, 'Tipo');
+    const kindSel = el('select', 'dev-select') as HTMLSelectElement;
+    for (const [v, t] of [['', 'Mezcla de la oleada'], ...Object.entries(ENEMY_KINDS).map(([k, d]) => [k, d.name])]) {
+      const o = document.createElement('option'); o.value = v; o.textContent = t; kindSel.appendChild(o);
+    }
+    r.appendChild(kindSel);
+    const kind = () => (kindSel.value || undefined) as EnemyKind | undefined;
+    r = row(s, 'Del bosque');
+    for (const n of [1, 10, 50, 200]) button(r, '+' + n, () => cheat.spawnMany(G(), n, 'forest', false, kind()));
+    r = row(s, 'Cerca de ti');
+    for (const n of [1, 10, 50, 200]) button(r, '+' + n, () => cheat.spawnMany(G(), n, 'near', false, kind()));
     r = row(s, 'Jefe');
     button(r, 'En el bosque', () => cheat.spawnMany(G(), 1, 'forest', true));
     button(r, 'Cerca de ti', () => cheat.spawnMany(G(), 1, 'near', true));
@@ -306,7 +315,7 @@ export function initDevPanel(ctx: DevContext) {
       const html =
         `<b>Oleada ${g.wave} en curso</b> (${w.seconds} s)<br>` +
         `Ganado: ${kv(w.earned)}<br>Gastado: ${kv(w.spent)}<br>Muertes: ${kv(w.kills)}<br>` +
-        `Daño al castillo: ${w.baseDamage} · Enemigos salidos: ${w.spawned}<br><br>` +
+        `Daño al castillo: ${w.baseDamage} · Enemigos salidos: ${w.spawned} (${kv(w.spawnedKind)})<br><br>` +
         `<b>Total</b> (${Math.round(g.t)} s)<br>` +
         `Ganado: ${kv(st.earned)}<br>Gastado: ${kv(st.spent as Record<string, number>)}<br>Muertes: ${kv(st.kills)}<br>` +
         `Torres: ${g.buildings.map(b => (b.type === 'archer' ? 'A' : 'C') + b.level).join(' ') || '—'}<br>` +

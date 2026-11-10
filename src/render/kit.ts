@@ -3,6 +3,7 @@
 //  castillo, cabaña del peón y proyectiles.
 // ============================================================
 import * as THREE from 'three';
+import type { EnemyKind } from '../game/types';
 import { Character, bake, model } from './assets';
 
 // ------------------------------------------------------------
@@ -77,11 +78,39 @@ function aimArm(m: KnightModel, k: number, recoil: number) {
 }
 const _tilt = new THREE.Quaternion(), _X = new THREE.Vector3(1, 0, 0);
 
-export function makeZombie(boss: boolean): Character {
-  // el jefe es un zombi más, solo que enorme
-  const ch = new Character('character-zombie', boss ? BOSS_SCALE : ENEMY_SCALE, true);
-  ch.play('walk');
-  return ch;
+/** Modelo de un enemigo y los nombres de sus animaciones (cada pack las llama a su manera). */
+export interface EnemyModel {
+  ch: Character;
+  walk: string; walkRate: number;   // ritmo de la animación de andar por unidad de velocidad
+  attack: string; die: string; cast?: string;
+  barY: number;                     // altura de la barra de vida (sobre el suelo, incluido el vuelo)
+}
+export const SKELETON_SCALE = 0.0021;
+export const BAT_SCALE = 0.0016;
+export const MAGE_SCALE = 0.36;
+
+export function makeEnemy(kind: EnemyKind, boss: boolean): EnemyModel {
+  let m: EnemyModel;
+  if (boss || kind === 'zombie') {
+    // el jefe es un zombi más, solo que enorme
+    const ch = new Character('character-zombie', boss ? BOSS_SCALE : ENEMY_SCALE, true);
+    m = { ch, walk: 'walk', walkRate: boss ? 0.9 : 1.6, attack: 'attack-melee-right', die: 'die', barY: boss ? 2.0 : 1.15 };
+  } else if (kind === 'runner') {
+    const ch = new Character('skeleton', SKELETON_SCALE, true);
+    m = { ch, walk: 'SkeletonArmature|Skeleton_Running', walkRate: 0.55, attack: 'SkeletonArmature|Skeleton_Attack', die: 'SkeletonArmature|Skeleton_Death', barY: 1.25 };
+  } else if (kind === 'bat') {
+    const ch = new Character('bat', BAT_SCALE, true);
+    m = { ch, walk: 'BatArmature|Bat_Flying', walkRate: 0.9, attack: 'BatArmature|Bat_Attack', die: 'BatArmature|Bat_Death', barY: 0.75 };
+  } else {
+    // mago (KayKit): báculo en la mano derecha; «Use_Item» como gesto del hechizo
+    const ch = new Character('Mage', MAGE_SCALE, true, ['Rig_Medium_General', 'Rig_Medium_MovementBasic']);
+    const staff = model('staff');
+    staff.traverse(o => { const mm = o as THREE.Mesh; if (mm.isMesh) { mm.material = (mm.material as THREE.MeshStandardMaterial).clone(); ch.mats.push(mm.material as THREE.MeshStandardMaterial); } });
+    ch.bone('handslotr')?.add(staff);
+    m = { ch, walk: 'Walking_A', walkRate: 1.1, attack: 'Interact', die: 'Death_A', cast: 'Use_Item', barY: 1.35 };
+  }
+  m.ch.play(m.walk);
+  return m;
 }
 
 /** Lobo (Quaternius, Ultimate Animated Animals): sustituye al perro. */

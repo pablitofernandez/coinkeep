@@ -12,6 +12,7 @@ function emptyCounters(): Counters {
     kills: { sword: 0, bow: 0, archer: 0, cannon: 0, dog: 0 },
     baseDamage: 0,
     spawned: 0,
+    spawnedKind: {},
   };
 }
 
@@ -21,6 +22,7 @@ export function emptyStats(): Stats {
 
 const snapshot = (c: Counters): Counters => JSON.parse(JSON.stringify({
   earned: c.earned, spent: c.spent, kills: c.kills, baseDamage: c.baseDamage, spawned: c.spawned,
+  spawnedKind: c.spawnedKind,
 }));
 
 function diffRecord<K extends string>(now: Partial<Record<K, number>>, before: Partial<Record<K, number>>) {
@@ -52,6 +54,7 @@ export function logWave(G: GameState) {
     kills: diffRecord(s.kills, l.kills) as Counters['kills'],
     baseDamage: s.baseDamage - l.baseDamage,
     spawned: s.spawned - l.spawned,
+    spawnedKind: diffRecord(s.spawnedKind, l.spawnedKind),
     towers: G.buildings.map(b => (b.type === 'archer' ? 'A' : 'C') + b.level).join(' '),
     towerMult: +G.towerMult.toFixed(2),
     helpers: {

@@ -10,7 +10,9 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 const FILES: Record<string, string[]> = {
   chars: ['character-male-b', 'character-zombie'],
   // KayKit Adventurers: el pícaro (jugador), sus armas y las animaciones del esqueleto «Rig_Medium»
-  kaykit: ['Rogue', 'Rig_Medium_General', 'Rig_Medium_MovementBasic', 'dagger.gltf', 'crossbow_1handed.gltf'],
+  kaykit: ['Rogue', 'Mage', 'Rig_Medium_General', 'Rig_Medium_MovementBasic', 'dagger.gltf', 'crossbow_1handed.gltf', 'staff.gltf'],
+  // Quaternius Animated Monster Pack (convertidos de FBX a GLB): esqueleto corredor y murciélago
+  monsters: ['skeleton', 'bat'],
   // Quaternius Ultimate Animated Animals
   animals: ['wolf'],
   td: [

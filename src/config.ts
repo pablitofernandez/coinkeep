@@ -1,7 +1,7 @@
 // ============================================================
 //  Datos de diseño / equilibrio. Todo lo "tocable" vive aquí.
 // ============================================================
-import type { PadType, TowerType } from './game/types';
+import type { EnemyKind, PadType, TowerType } from './game/types';
 
 // Mundo: un bosque enorme con un claro jugable alrededor de la base.
 export const WORLD = {
@@ -42,21 +42,54 @@ export const WAVES = {
   spawnWindow: 13,        // segundos en los que se reparte la oleada
 };
 
-export function enemyStats(wave: number, boss: boolean) {
+/**
+ * Tipos de enemigo. Los valores multiplican los del zombi de esa oleada.
+ *  - from: primera oleada en la que aparece; share: proporción de la oleada (va subiendo hasta `max`).
+ *  - fly: altura de vuelo (los voladores pasan por encima de árboles y rocas; el cañón no les acierta).
+ */
+export const ENEMY_KINDS: Record<EnemyKind, {
+  name: string; hp: number; speed: number; value: number; r: number; dmg: number;
+  from: number; share: number; grow: number; max: number; fly: number;
+}> = {
+  zombie: { name: 'Zombi',       hp: 1,    speed: 1,    value: 1,   r: 0.3,  dmg: 1, from: 1, share: 1,    grow: 0,     max: 1,    fly: 0 },
+  runner: { name: 'Esqueleto',   hp: 0.5,  speed: 1.75, value: 0.8, r: 0.27, dmg: 1, from: 3, share: 0.2,  grow: 0.01,  max: 0.35, fly: 0 },
+  bat:    { name: 'Murciélago',  hp: 0.55, speed: 1.3,  value: 1,   r: 0.28, dmg: 1, from: 6, share: 0.15, grow: 0.01,  max: 0.25, fly: 0.95 },
+  shaman: { name: 'Mago',        hp: 2.2,  speed: 0.8,  value: 3,   r: 0.3,  dmg: 1, from: 8, share: 0.05, grow: 0.004, max: 0.1,  fly: 0 },
+};
+
+/** Curación del mago: cada `every` s cura un `pct` de la vida máxima a los enemigos a menos de `range` (también a sí mismo). */
+export const SHAMAN = { every: 3.2, pct: 0.18, range: 2.8, firstCast: 1.5 };
+
+/** Elige al azar el tipo de un enemigo normal de la oleada `wave`. */
+export function pickEnemyKind(wave: number): EnemyKind {
+  let roll = Math.random();
+  for (const k of ['shaman', 'bat', 'runner'] as const) {
+    const d = ENEMY_KINDS[k];
+    if (wave < d.from) continue;
+    const share = Math.min(d.max, d.share + d.grow * (wave - d.from));
+    if (roll < share) return k;
+    roll -= share;
+  }
+  return 'zombie';
+}
+
+export function enemyStats(wave: number, boss: boolean, kind: EnemyKind = 'zombie') {
   // +15% de vida por oleada hasta la 25; a partir de ahí crece algo más despacio (+12%)
   const late = Math.max(0, wave - 25);
   const baseHp = Math.ceil(3 * Math.pow(1.15, Math.min(wave, 25) - 1) * Math.pow(1.12, late));
   const hp = baseHp * (boss ? 8 : 1);
   // la recompensa crece con la vida (no linealmente con la oleada)
   const baseValue = Math.max(2, Math.round(Math.pow(baseHp, 0.8)));
+  const k = ENEMY_KINDS[boss ? 'zombie' : kind];
+  const khp = Math.max(1, Math.round(hp * k.hp));
   return {
-    hp,
-    maxHp: hp,
-    speed: (0.9 + Math.min(0.7, wave * 0.035)) * (boss ? 0.6 : 0.9 + Math.random() * 0.25),
-    value: baseValue * (boss ? 10 : 1),
-    dmg: boss ? 3 : 1,                // daño por golpe a la base
+    hp: khp,
+    maxHp: khp,
+    speed: (0.9 + Math.min(0.7, wave * 0.035)) * (boss ? 0.6 : 0.9 + Math.random() * 0.25) * k.speed,
+    value: boss ? baseValue * 10 : Math.max(1, Math.round(baseValue * k.value)),
+    dmg: boss ? 3 : k.dmg,            // daño por golpe a la base
     atkRate: boss ? 1.5 : 2.0,        // segundos entre golpes
-    r: boss ? 0.55 : 0.3,
+    r: boss ? 0.55 : k.r,
   };
 }
 

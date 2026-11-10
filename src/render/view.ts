@@ -14,7 +14,7 @@ import {
 import { bake, instanced, type Character } from './assets';
 import { DebugDraw } from './debugDraw';
 import {
-  aimCrossbow, makeArrowK, makeBallK, makeDogK, makeCastleK, makeHutK, makeKnight, makeTower, makeWorker, makeZombie,
+  aimCrossbow, makeArrowK, makeBallK, makeDogK, makeCastleK, makeHutK, makeKnight, makeTower, makeWorker, makeEnemy, type EnemyModel,
   type KnightModel, type TowerModel,
 } from './kit';
 
@@ -89,9 +89,9 @@ export class View {
   private castleShake = 0;
   private coins: THREE.InstancedMesh;
 
-  private enemies = new Map<number, { ch: Character; hp: CSS2DObject; hitT: number }>();
+  private enemies = new Map<number, { em: EnemyModel; ch: Character; hp: CSS2DObject; flash: string; castT: number }>();
   // enemigos muertos que aún se ven caer
-  private dying: { ch: Character; t: number }[] = [];
+  private dying: { ch: Character; t: number; y0: number }[] = [];
   private towers = new Map<number, { m: TowerModel; table: THREE.Group; tableLabel: CSS2DObject; stars: CSS2DObject; born: number; level: number; topY: number }>();
   private pads = new Map<number, { m: PadModel; label: CSS2DObject; pop: number }>();
   private shots = new Map<number, THREE.Object3D>();
@@ -457,26 +457,32 @@ export class View {
       seen.add(e.id);
       let v = this.enemies.get(e.id);
       if (!v) {
-        const ch = makeZombie(e.boss);
+        const em = makeEnemy(e.kind, e.boss);
+        const ch = em.ch;
         // cada uno empieza la animación en un punto distinto (que no anden todos a la vez)
         ch.mixer.setTime(Math.random() * 2);
         const hp = label('hpbar', '<div></div>');
-        hp.position.set(0, e.boss ? 2.0 : 1.15, 0);
+        hp.position.set(0, em.barY + e.fly, 0);
         ch.root.add(hp);
         this.scene.add(ch.root);
-        v = { ch, hp, hitT: 0 };
+        v = { em, ch, hp, flash: '', castT: 0 };
         this.enemies.set(e.id, v);
       }
       const ch = v.ch;
       const dx = BASE.x - e.x, dy = BASE.y - e.y;
-      ch.root.position.set(e.x, 0, e.y);
+      const em = v.em;
+      // los que vuelan suben y bajan un poco al batir las alas
+      ch.root.position.set(e.x, e.fly ? e.fly + Math.sin(this.time * 6 + e.id) * 0.06 : 0, e.y);
       ch.root.rotation.y = Math.atan2(dx, dy);
-      if (e.attacking) ch.play('attack-melee-right', 1 / (e.boss ? 1.5 : 2.0) * 1.6);
-      else ch.play('walk', e.speed * (e.boss ? 0.9 : 1.6));
-      // al recibir un golpe: destello blanco
-      const flash = e.hit > 0;
-      if (flash !== v.hitT > 0) for (const m of ch.mats) m.emissive.set(flash ? '#ffffff' : '#000000');
-      v.hitT = flash ? 1 : 0;
+      // el mago, al lanzar la curación, hace su gesto por encima de la animación de andar
+      if (em.cast && e.lunge > 0.5 && v.castT <= 0) { ch.once(em.cast, 1.4); v.castT = 0.6; }
+      v.castT -= dt;
+      if (e.attacking) ch.play(em.attack, 1 / (e.boss ? 1.5 : 2.0) * 1.6);
+      else ch.play(em.walk, e.speed * em.walkRate);
+      // al recibir un golpe: destello blanco; al ser curado por un mago: verde
+      const flash = e.hit > 0 ? '#ffffff' : e.healed > 0 ? '#2fae4a' : '';
+      if (flash !== v.flash) for (const m of ch.mats) m.emissive.set(flash || '#000000');
+      v.flash = flash;
       ch.update(dt);
       v.hp.visible = e.hp < e.maxHp;
       setWidth(v.hp.element.firstChild as HTMLElement, Math.max(0, e.hp / e.maxHp * 100));
@@ -487,13 +493,15 @@ export class View {
       v.ch.root.remove(v.hp);
       for (const m of v.ch.mats) m.emissive.set('#000000');
       v.ch.root.scale.setScalar(1);
-      v.ch.once('die', 1.6, true);
-      this.dying.push({ ch: v.ch, t: 0 });
+      v.ch.once(v.em.die, 1.6, true);
+      this.dying.push({ ch: v.ch, t: 0, y0: v.ch.root.position.y });
       this.enemies.delete(id);
     }
     for (const d of this.dying) {
       d.t += dt;
       d.ch.update(dt);
+      // los que vuelan caen al suelo; luego todos se hunden en la tierra
+      if (d.y0 > 0) d.ch.root.position.y = Math.max(0, d.y0 - d.t * d.t * 6);
       if (d.t > 0.7) d.ch.root.position.y = -(d.t - 0.7) * 1.2;
     }
     for (const d of this.dying) if (d.t > 1.2) { this.scene.remove(d.ch.root); d.ch.dispose(); }
