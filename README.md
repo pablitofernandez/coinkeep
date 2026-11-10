@@ -80,8 +80,8 @@ All models and sounds are **CC0** (public domain). Many thanks to their authors:
   - [Castle Kit](https://kenney.nl/assets/castle-kit)
   - [Nature Kit](https://kenney.nl/assets/nature-kit)
   - [Impact Sounds](https://kenney.nl/assets/impact-sounds)
-- **[KayKit](https://kaylousberg.com)** (Kay Lousberg): Adventurers 2.0, for the rogue, the dagger, the crossbow and the animations.
-- **[Quaternius](https://quaternius.com)**: Ultimate Animated Animals, for the wolf, and Animated Monster Pack, for the skeleton and the bat.
+- **[KayKit](https://kaylousberg.com)** (Kay Lousberg): Adventurers 2.0, for the rogue, the dagger, the crossbow and the animations, and Skeletons 1.1, for the skeleton enemies.
+- **[Quaternius](https://quaternius.com)**: Ultimate Animated Animals, for the wolf, and Animated Monster Pack, for the bat.
 
 See [`public/models/CREDITS.txt`](public/models/CREDITS.txt) for exactly what is used from each pack.
 

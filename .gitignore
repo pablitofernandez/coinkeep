@@ -9,3 +9,6 @@ Thumbs.db
 *.log
 # ajustes locales de Claude Code
 .claude/settings.local.json
+
+# variables locales de prueba (no se suben)
+.env.local

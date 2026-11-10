@@ -24,7 +24,7 @@ const MIN_GAP: Partial<Record<SfxName, number>> = {
   coin: 0.06, pay: 0.07, baseHit: 0.25,
 };
 /** Sonido de muerte de cada tipo de enemigo. */
-const DIE_SOUND: Record<EnemyKind, SfxName> = { zombie: 'die', shaman: 'die', runner: 'dieBones', bat: 'dieBat' };
+const DIE_SOUND: Record<EnemyKind, SfxName> = { zombie: 'dieBones', shaman: 'dieBones', runner: 'dieBones', bat: 'dieBat' };
 const MAX_VOICES = 14;           // sonidos simultáneos como mucho
 const HEAR_RANGE = 14;           // a partir de esta distancia al jugador no se oye
 

@@ -7,8 +7,10 @@
   sounds/  Impact Sounds          https://kenney.nl/assets/impact-sounds
 
 KayKit Adventurers 2.0 (Kay Lousberg, www.kaylousberg.com) — Creative Commons Zero (CC0)
-  kaykit/  Rogue (jugador), Mage (enemigo mago), daga, ballesta, báculo y animaciones Rig_Medium
+  kaykit/  Rogue (jugador), daga, ballesta y animaciones Rig_Medium
+KayKit Skeletons 1.1 (Kay Lousberg, www.kaylousberg.com) — Creative Commons Zero (CC0)
+  skeletons/ Guerrero, esbirro y mago esqueleto, con sus armas
 Ultimate Animated Animals (Quaternius, quaternius.com) — Creative Commons Zero (CC0)
   animals/ Lobo
 Animated Monster Pack (Quaternius, quaternius.com) — Creative Commons Zero (CC0)
-  monsters/ Esqueleto y murciélago (convertidos de FBX a GLB)
+  monsters/ Murciélago (convertido de FBX a GLB)

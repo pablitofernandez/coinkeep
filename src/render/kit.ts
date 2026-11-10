@@ -10,8 +10,6 @@ import { Character, bake, model } from './assets';
 //  Personajes
 // ------------------------------------------------------------
 export const PLAYER_SCALE = 0.46;     // el pícaro de KayKit es mucho más grande que los Mini Characters
-export const ENEMY_SCALE = 1.35;
-export const BOSS_SCALE = 2.3;
 export const PEON_SCALE = 1.25;
 
 export interface KnightModel { ch: Character; sword: THREE.Object3D; bow: THREE.Object3D }
@@ -85,29 +83,46 @@ export interface EnemyModel {
   attack: string; die: string; cast?: string;
   barY: number;                     // altura de la barra de vida (sobre el suelo, incluido el vuelo)
 }
-export const SKELETON_SCALE = 0.0021;
+export const SKELETON_SCALE = 0.44;   // KayKit Skeletons (mismo tamaño de modelo que el pícaro)
+export const MINION_SCALE = 0.4;
+export const BOSS_SCALE = 0.8;
 export const BAT_SCALE = 0.0016;
-export const MAGE_SCALE = 0.36;
+const RIG = ['Rig_Medium_General', 'Rig_Medium_MovementBasic'];
+
+/** Esqueleto de KayKit con sus armas en las manos (materiales propios, para el destello al golpearlo). */
+function skeleton(name: string, scale: number, right?: string, left?: string): Character {
+  const ch = new Character(name, scale, true, RIG);
+  for (const [slot, weapon] of [['handslotr', right], ['handslotl', left]] as const) {
+    if (!weapon) continue;
+    const w = model(weapon);
+    w.traverse(o => {
+      const mm = o as THREE.Mesh;
+      if (!mm.isMesh) return;
+      const mat = (mm.material as THREE.MeshStandardMaterial).clone();
+      mm.material = mat; ch.mats.push(mat);
+    });
+    ch.bone(slot)?.add(w);
+  }
+  return ch;
+}
 
 export function makeEnemy(kind: EnemyKind, boss: boolean): EnemyModel {
   let m: EnemyModel;
   if (boss || kind === 'zombie') {
-    // el jefe es un zombi más, solo que enorme
-    const ch = new Character('character-zombie', boss ? BOSS_SCALE : ENEMY_SCALE, true);
-    m = { ch, walk: 'walk', walkRate: boss ? 0.9 : 1.6, attack: 'attack-melee-right', die: 'die', barY: boss ? 2.0 : 1.15 };
+    // guerrero esqueleto con espada y escudo; el jefe es el mismo, solo que enorme
+    const ch = skeleton('Skeleton_Warrior', boss ? BOSS_SCALE : SKELETON_SCALE, 'Skeleton_Blade', 'Skeleton_Shield_Small_A');
+    m = { ch, walk: 'Walking_A', walkRate: boss ? 1.0 : 1.15, attack: 'Throw', die: 'Death_A', barY: boss ? 2.3 : 1.3 };
   } else if (kind === 'runner') {
-    const ch = new Character('skeleton', SKELETON_SCALE, true);
-    m = { ch, walk: 'SkeletonArmature|Skeleton_Running', walkRate: 0.55, attack: 'SkeletonArmature|Skeleton_Attack', die: 'SkeletonArmature|Skeleton_Death', barY: 1.25 };
+    // esbirro con hacha, corriendo
+    const ch = skeleton('Skeleton_Minion', MINION_SCALE, 'Skeleton_Axe');
+    m = { ch, walk: 'Running_A', walkRate: 0.45, attack: 'Throw', die: 'Death_B', barY: 1.2 };
   } else if (kind === 'bat') {
     const ch = new Character('bat', BAT_SCALE, true);
     m = { ch, walk: 'BatArmature|Bat_Flying', walkRate: 0.9, attack: 'BatArmature|Bat_Attack', die: 'BatArmature|Bat_Death', barY: 0.75 };
   } else {
-    // mago (KayKit): báculo en la mano derecha; «Use_Item» como gesto del hechizo
-    const ch = new Character('Mage', MAGE_SCALE, true, ['Rig_Medium_General', 'Rig_Medium_MovementBasic']);
-    const staff = model('staff');
-    staff.traverse(o => { const mm = o as THREE.Mesh; if (mm.isMesh) { mm.material = (mm.material as THREE.MeshStandardMaterial).clone(); ch.mats.push(mm.material as THREE.MeshStandardMaterial); } });
-    ch.bone('handslotr')?.add(staff);
-    m = { ch, walk: 'Walking_A', walkRate: 1.1, attack: 'Interact', die: 'Death_A', cast: 'Use_Item', barY: 1.35 };
+    // mago esqueleto: báculo en la mano derecha; «Use_Item» como gesto del hechizo
+    const ch = skeleton('Skeleton_Mage', SKELETON_SCALE, 'Skeleton_Staff');
+    m = { ch, walk: 'Walking_B', walkRate: 1.1, attack: 'Interact', die: 'Death_A', cast: 'Use_Item', barY: 1.4 };
   }
   m.ch.play(m.walk);
   return m;

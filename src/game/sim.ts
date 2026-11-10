@@ -5,9 +5,9 @@
 import {
   BASE, BASE_HALF, BASE_HP, CASTLE_HALF, PLAYER_RADIUS, FORGE_MULT, HELPERS, PAD_DEFS, PAD_INFO, PLAYER, PROP_KINDS, PROP_SOLID,
   REPEAT_COST_MULT, REPEAT_COST_MULT_BY,
-  TOWER_CASTLE_MARGIN, TOWER_STATS, TOWER_UPGRADE, WAVES, WORLD, enemyStats, ENEMY_KINDS, SHAMAN, pickEnemyKind,
+  TOWER_CASTLE_MARGIN, TOWER_STATS, TOWER_UPGRADE, WAVES, WORLD, enemyStats, ENEMY_KINDS, SHAMAN, pickEnemyKind, waveCount,
 } from '../config';
-import type { Building, Drop, Enemy, EnemyKind, GameState, Helper, HelperKind, KillSource, Pad, Prop, SfxName, Solid, Vec } from './types';
+import type { Building, Difficulty, Drop, Enemy, EnemyKind, GameState, Helper, HelperKind, KillSource, Pad, Prop, SfxName, Solid, Vec } from './types';
 import { emptyStats, logWave } from './stats';
 
 let nextId = 1;
@@ -15,9 +15,9 @@ const uid = () => nextId++;
 const dist = (a: Vec, b: Vec) => Math.hypot(a.x - b.x, a.y - b.y);
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
-export function createGame(): GameState {
+export function createGame(difficulty: Difficulty = 'normal'): GameState {
   const G: GameState = {
-    t: 0, over: false, built: 0,
+    t: 0, difficulty, over: false, built: 0,
     player: {
       x: PLAYER.start.x, y: PLAYER.start.y, coins: 0,
       swordDmg: PLAYER.sword.dmg, bowDmg: PLAYER.bow.dmg, speed: PLAYER.speed,
@@ -157,7 +157,7 @@ export function spawnEnemy(G: GameState, boss: boolean, at?: Vec, kind?: EnemyKi
   G.stats.spawnedKind[tag] = (G.stats.spawnedKind[tag] ?? 0) + 1;
   const a = Math.random() * Math.PI * 2;
   const x = at ? at.x : BASE.x + Math.cos(a) * WORLD.spawnRadius, y = at ? at.y : BASE.y + Math.sin(a) * WORLD.spawnRadius;
-  const st = enemyStats(Math.max(1, G.wave), boss, k);
+  const st = enemyStats(Math.max(1, G.wave), boss, k, G.difficulty);
   st.hp = st.maxHp = Math.max(1, Math.round(st.hp * G.dev.enemyHp));
   G.enemies.push({
     id: uid(), x, y, ...st, boss, kind: k, fly: ENEMY_KINDS[k].fly, cast: SHAMAN.firstCast, healed: 0,
@@ -176,7 +176,7 @@ function updateWaves(G: GameState, dt: number) {
   if (G.waveTimer <= 0) {
     if (G.wave > 0) logWave(G);   // resumen de la oleada que termina
     G.wave++;
-    G.spawnLeft = WAVES.count(G.wave);
+    G.spawnLeft = waveCount(G.wave, G.difficulty);
     G.spawnTimer = 0;
     G.waveTimer = WAVES.interval;
     sfx(G, G.wave % WAVES.bossEvery === 0 ? 'boss' : 'wave');
@@ -188,7 +188,7 @@ function updateWaves(G: GameState, dt: number) {
     if (G.spawnTimer <= 0) {
       spawnEnemy(G, false);
       G.spawnLeft--;
-      G.spawnTimer = Math.max(0.25, WAVES.spawnWindow / WAVES.count(G.wave));
+      G.spawnTimer = Math.max(0.25, WAVES.spawnWindow / waveCount(G.wave, G.difficulty));
     }
   }
 }

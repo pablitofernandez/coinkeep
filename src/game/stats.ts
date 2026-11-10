@@ -37,7 +37,7 @@ function diffRecord<K extends string>(now: Partial<Record<K, number>>, before: P
 /** Guarda la foto de la oleada actual (se llama al empezar la siguiente o al perder). */
 export function logWave(G: GameState) {
   const s = G.stats, l = s.last;
-  const normal = enemyStats(G.wave, false);
+  const normal = enemyStats(G.wave, false, 'zombie', G.difficulty);
   const log: WaveLog = {
     wave: G.wave,
     t: Math.round(G.t),

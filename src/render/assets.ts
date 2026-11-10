@@ -8,11 +8,13 @@ import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const FILES: Record<string, string[]> = {
-  chars: ['character-male-b', 'character-zombie'],
+  chars: ['character-male-b'],
   // KayKit Adventurers: el pícaro (jugador), sus armas y las animaciones del esqueleto «Rig_Medium»
-  kaykit: ['Rogue', 'Mage', 'Rig_Medium_General', 'Rig_Medium_MovementBasic', 'dagger.gltf', 'crossbow_1handed.gltf', 'staff.gltf'],
-  // Quaternius Animated Monster Pack (convertidos de FBX a GLB): esqueleto corredor y murciélago
-  monsters: ['skeleton', 'bat'],
+  kaykit: ['Rogue', 'Rig_Medium_General', 'Rig_Medium_MovementBasic', 'dagger.gltf', 'crossbow_1handed.gltf'],
+  // KayKit Skeletons (mismo esqueleto Rig_Medium que el pícaro: comparten animaciones)
+  skeletons: ['Skeleton_Warrior', 'Skeleton_Minion', 'Skeleton_Mage', 'Skeleton_Blade.gltf', 'Skeleton_Axe.gltf', 'Skeleton_Staff.gltf', 'Skeleton_Shield_Small_A.gltf'],
+  // Quaternius Animated Monster Pack (convertido de FBX a GLB): murciélago
+  monsters: ['bat'],
   // Quaternius Ultimate Animated Animals
   animals: ['wolf'],
   td: [

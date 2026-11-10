@@ -35,7 +35,7 @@ const NAMES: Record<string, string> = {
   ground: 'suelo', table: 'mesas', dog: 'lobos', peon: 'peones',
   sword: 'espada', bow: 'ballesta', archer: 'arqueras', cannon: 'cañones',
   power: 'fuerza', repair: 'reparar', forge: 'forja', kennel: 'lobos', upgrade: 'mejoras',
-  zombie: 'zombis', runner: 'esqueletos', bat: 'murciélagos', shaman: 'magos', boss: 'jefes',
+  zombie: 'guerreros', runner: 'esbirros', bat: 'murciélagos', shaman: 'magos', boss: 'jefes',
 };
 
 const REPEATABLE: [PadType, string][] = [

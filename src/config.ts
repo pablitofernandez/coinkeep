@@ -1,7 +1,7 @@
 // ============================================================
 //  Datos de diseño / equilibrio. Todo lo "tocable" vive aquí.
 // ============================================================
-import type { EnemyKind, PadType, TowerType } from './game/types';
+import type { Difficulty, EnemyKind, PadType, TowerType } from './game/types';
 
 // Mundo: un bosque enorme con un claro jugable alrededor de la base.
 export const WORLD = {
@@ -51,8 +51,8 @@ export const ENEMY_KINDS: Record<EnemyKind, {
   name: string; hp: number; speed: number; value: number; r: number; dmg: number;
   from: number; share: number; grow: number; max: number; fly: number;
 }> = {
-  zombie: { name: 'Zombi',       hp: 1,    speed: 1,    value: 1,   r: 0.3,  dmg: 1, from: 1, share: 1,    grow: 0,     max: 1,    fly: 0 },
-  runner: { name: 'Esqueleto',   hp: 0.5,  speed: 1.75, value: 0.8, r: 0.27, dmg: 1, from: 3, share: 0.2,  grow: 0.01,  max: 0.35, fly: 0 },
+  zombie: { name: 'Guerrero',     hp: 1,    speed: 1,    value: 1,   r: 0.3,  dmg: 1, from: 1, share: 1,    grow: 0,     max: 1,    fly: 0 },
+  runner: { name: 'Esbirro',     hp: 0.5,  speed: 1.75, value: 0.8, r: 0.27, dmg: 1, from: 3, share: 0.2,  grow: 0.01,  max: 0.35, fly: 0 },
   bat:    { name: 'Murciélago',  hp: 0.55, speed: 1.3,  value: 1,   r: 0.28, dmg: 1, from: 6, share: 0.15, grow: 0.01,  max: 0.25, fly: 0.95 },
   shaman: { name: 'Mago',        hp: 2.2,  speed: 0.8,  value: 3,   r: 0.3,  dmg: 1, from: 8, share: 0.05, grow: 0.004, max: 0.1,  fly: 0 },
 };
@@ -73,13 +73,37 @@ export function pickEnemyKind(wave: number): EnemyKind {
   return 'zombie';
 }
 
-export function enemyStats(wave: number, boss: boolean, kind: EnemyKind = 'zombie') {
-  // +15% de vida por oleada hasta la 25; a partir de ahí crece algo más despacio (+12%)
-  const late = Math.max(0, wave - 25);
-  const baseHp = Math.ceil(3 * Math.pow(1.15, Math.min(wave, 25) - 1) * Math.pow(1.12, late));
+/**
+ * Dificultad (se elige en la portada). La vida de los enemigos crece un `grow` por oleada hasta la 15,
+ * luego `mid` hasta la 30 y `late` a partir de ahí. El botín NO sigue esa curva: sale de una curva fija
+ * (`lootHp`, la de las primeras versiones) por `loot`. Así más vida = más duro, no más dinero.
+ * Ojo: el dinero es lo que más decide la dificultad (con más botín, las torres crecen más rápido que los enemigos).
+ * `count` multiplica los enemigos por oleada.
+ */
+export const DIFFICULTY: Record<Difficulty, { name: string; grow: number; mid: number; late: number; count: number; loot: number }> = {
+  normal:    { name: 'Normal',    grow: 1.21, mid: 1.2,  late: 1.16, count: 1.4,  loot: 0.9 },
+  hard:      { name: 'Difícil',   grow: 1.22, mid: 1.21, late: 1.17, count: 1.45, loot: 0.85 },
+  nightmare: { name: 'Pesadilla', grow: 1.24, mid: 1.23, late: 1.19, count: 1.6,  loot: 0.8 },
+};
+export const DIFFICULTIES = Object.keys(DIFFICULTY) as Difficulty[];
+
+/** Vida base de un zombi en la oleada `wave` con esa dificultad. */
+export function waveHp(wave: number, diff: Difficulty) {
+  const d = DIFFICULTY[diff];
+  return 3 * Math.pow(d.grow, Math.min(wave, 15) - 1) * Math.pow(d.mid, Math.max(0, Math.min(wave, 30) - 15)) * Math.pow(d.late, Math.max(0, wave - 30));
+}
+
+/** Curva fija de la que sale el botín: +15 % por oleada hasta la 25 y +12 % después. */
+const lootHp = (wave: number) => 3 * Math.pow(1.15, Math.min(wave, 25) - 1) * Math.pow(1.12, Math.max(0, wave - 25));
+
+/** Enemigos de la oleada (sin contar al jefe). */
+export const waveCount = (wave: number, diff: Difficulty) => Math.round(WAVES.count(wave) * DIFFICULTY[diff].count);
+
+export function enemyStats(wave: number, boss: boolean, kind: EnemyKind = 'zombie', diff: Difficulty = 'normal') {
+  const baseHp = Math.ceil(waveHp(wave, diff));
   const hp = baseHp * (boss ? 8 : 1);
-  // la recompensa crece con la vida (no linealmente con la oleada)
-  const baseValue = Math.max(2, Math.round(Math.pow(baseHp, 0.8)));
+  // la recompensa crece con la curva fija de botín (no linealmente con la oleada)
+  const baseValue = Math.max(2, Math.round(Math.pow(lootHp(wave), 0.8) * DIFFICULTY[diff].loot));
   const k = ENEMY_KINDS[boss ? 'zombie' : kind];
   const khp = Math.max(1, Math.round(hp * k.hp));
   return {

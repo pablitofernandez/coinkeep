@@ -120,8 +120,11 @@ export type GameEvent =
   | { type: 'baseHit' }
   | { type: 'padUpgraded'; id: number };
 
+export type Difficulty = 'normal' | 'hard' | 'nightmare';
+
 export interface GameState {
   t: number;
+  difficulty: Difficulty;
   over: boolean;
   built: number;
   player: Player;

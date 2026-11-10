@@ -1,6 +1,8 @@
 import { autopilotDir, showcase, showcaseTick } from './game/cheats';
 import { createGame, step } from './game/sim';
-import type { GameState, Vec } from './game/types';
+import type { Difficulty, GameState, Vec } from './game/types';
+import { DIFFICULTIES, DIFFICULTY } from './config';
+import { cleanName, leaderboardEnabled, rankOf, savedName, submitScore, topScores, type Score } from './leaderboard';
 import { Sound } from './audio';
 import { DevLog } from './devlog';
 import { Input, isTyping, preventBrowserZoom } from './input';
@@ -30,6 +32,71 @@ document.body.classList.add('title-mode');
 $('title').classList.remove('hidden');
 view.orbit = Math.PI / 4;
 view.setZoom(0.85);
+
+// --- dificultad (se recuerda entre partidas)
+let difficulty: Difficulty = (() => {
+  try { const d = localStorage.getItem('sg-diff') as Difficulty; return DIFFICULTIES.includes(d) ? d : 'normal'; } catch { return 'normal'; }
+})();
+/** Que los clics en botones no muevan el joystick ni empiecen la partida. */
+const guard = (el: HTMLElement) => el.addEventListener('pointerdown', e => e.stopPropagation());
+const diffBox = $('diff');
+for (const d of DIFFICULTIES) {
+  const b = document.createElement('button');
+  b.className = 'menu-btn'; b.textContent = DIFFICULTY[d].name; b.dataset.d = d;
+  b.setAttribute('role', 'radio');
+  guard(b);
+  b.addEventListener('click', () => {
+    difficulty = d;
+    try { localStorage.setItem('sg-diff', d); } catch { /* sin almacenamiento */ }
+    showDifficulty();
+    if (!$('board').classList.contains('hidden')) void showBoard();
+  });
+  diffBox.appendChild(b);
+}
+function showDifficulty() {
+  for (const b of diffBox.children as HTMLCollectionOf<HTMLElement>) {
+    b.classList.toggle('on', b.dataset.d === difficulty);
+    b.setAttribute('aria-checked', String(b.dataset.d === difficulty));
+  }
+}
+showDifficulty();
+
+// --- clasificación global
+const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+/** Pinta una lista de puntuaciones (con textContent: los nombres los escribe la gente). */
+function fillList(list: HTMLElement, scores: Score[], me?: Score, myRank?: number) {
+  list.replaceChildren();
+  const item = (pos: string, who: string, score: string, mine: boolean) => {
+    const li = document.createElement('li');
+    if (mine) li.className = 'me';
+    for (const [cls, t] of [['pos', pos], ['who', who], ['score', score]]) {
+      const sp = document.createElement('span'); sp.className = cls; sp.textContent = t; li.appendChild(sp);
+    }
+    list.appendChild(li);
+  };
+  let shown = false;
+  scores.forEach((s, i) => {
+    const mine = !!me && !shown && myRank === i + 1 && s.name === me.name && s.wave === me.wave && s.seconds === me.seconds;
+    if (mine) shown = true;
+    item(`${i + 1}.`, s.name, `Oleada ${s.wave} · ${fmtTime(s.seconds)}`, mine);
+  });
+  if (me && myRank && !shown) item(`${myRank}.`, me.name, `Oleada ${me.wave} · ${fmtTime(me.seconds)}`, true);
+  if (!scores.length && !me) boardMessage(list, 'Todavía no hay récords. ¡Sé el primero!');
+}
+function boardMessage(list: HTMLElement, text: string) {
+  const li = document.createElement('li'); li.className = 'empty'; li.textContent = text; list.replaceChildren(li);
+}
+async function showBoard() {
+  const list = $('board-list');
+  $('board').classList.remove('hidden');
+  $('board-diff').textContent = DIFFICULTY[difficulty].name;
+  boardMessage(list, 'Cargando…');
+  try { fillList(list, await topScores(difficulty)); } catch { boardMessage(list, 'No se pudo cargar la clasificación.'); }
+}
+for (const id of ['show-board', 'board-close', 'board']) guard($(id));
+$('show-board').addEventListener('click', () => void showBoard());
+$('board-close').addEventListener('click', () => $('board').classList.add('hidden'));
+if (!leaderboardEnabled) $('show-board').classList.add('hidden');
 
 /** Sale de la pantalla de título y empieza la partida de verdad. */
 function startGame() {
@@ -66,12 +133,76 @@ window.addEventListener('keydown', e => { if (e.key.toLowerCase() === 'n' && !e.
 window.addEventListener('resize', () => view.resize());
 
 function restart() {
-  G = createGame();
+  G = createGame(difficulty);
   view.reset(G);
   devlog.start();
   $('gameover').classList.add('hidden');
 }
-input.onAny = () => { if (inTitle) startGame(); else if (G.over) restart(); };
+
+/** Vuelve a la portada (para cambiar de dificultad o ver la clasificación). */
+function backToTitle() {
+  G = createGame();
+  showcase(G);
+  view.reset(G);
+  inTitle = true;
+  document.body.classList.add('title-mode');
+  $('title').classList.remove('hidden', 'leaving');
+  $('board').classList.add('hidden');
+  $('gameover').classList.add('hidden');
+  view.orbit = Math.PI / 4;
+  view.setZoom(0.85);
+}
+input.onAny = () => { if (inTitle) startGame(); };
+
+// --- fin de partida: guardar el récord con tu nombre y ver la clasificación
+guard($('gameover'));
+$('go-again').addEventListener('click', () => restart());
+$('go-menu').addEventListener('click', () => backToTitle());
+// Intro o espacio también reintentan (si no estás escribiendo el nombre)
+window.addEventListener('keydown', e => {
+  if (!G.over || inTitle || isTyping(e) || e.repeat) return;
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); restart(); }
+});
+let finalScore: Score | null = null;
+async function onGameOver() {
+  const form = $('go-form'), msg = $('go-msg'), list = $('go-list');
+  list.replaceChildren(); msg.textContent = '';
+  const score: Score = { name: '', wave: G.wave, seconds: Math.round(G.t), difficulty: G.difficulty };
+  finalScore = score;
+  $('go-text').textContent = `${DIFFICULTY[G.difficulty].name} · Oleada ${G.wave} · ${fmtTime(score.seconds)} · ${G.buildings.length} torres`;
+  const canSubmit = leaderboardEnabled && !G.cheated && G.wave >= 1;
+  form.classList.toggle('hidden', !canSubmit);
+  if (!leaderboardEnabled) return;
+  if (G.cheated) msg.textContent = 'Partida con trucos: no cuenta para la clasificación.';
+  try {
+    const [top, rank] = await Promise.all([topScores(score.difficulty), rankOf(score)]);
+    if (finalScore !== score) return;   // ya ha empezado otra partida
+    fillList(list, top);
+    if (!canSubmit) return;
+    msg.textContent = rank <= 10 ? `¡Entrarías en el puesto ${rank}! Escribe tu nombre.` : `Quedarías en el puesto ${rank}.`;
+    const name = $('go-name') as HTMLInputElement;
+    name.value = savedName();
+    if (!matchMedia('(pointer: coarse)').matches) name.focus();
+  } catch { msg.textContent = 'No se pudo conectar con la clasificación.'; }
+}
+$('go-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const field = $('go-name') as HTMLInputElement, send = $('go-send') as HTMLButtonElement, msg = $('go-msg');
+  const name = cleanName(field.value);
+  if (!finalScore || !name) { msg.textContent = 'Escribe un nombre.'; field.focus(); return; }
+  send.disabled = true; msg.textContent = 'Guardando…';
+  try {
+    const me = { ...finalScore, name };
+    await submitScore(me);
+    finalScore = null;   // una sola vez por partida
+    const [top, rank] = await Promise.all([topScores(me.difficulty), rankOf(me)]);
+    fillList($('go-list'), top, me, rank);
+    msg.textContent = `¡Guardado! Puesto ${rank} en ${DIFFICULTY[me.difficulty].name}.`;
+    $('go-form').classList.add('hidden');
+    field.blur();
+  } catch { msg.textContent = 'No se pudo guardar. Inténtalo otra vez.'; }
+  send.disabled = false;
+});
 
 /**
  * Convierte la dirección de pantalla en dirección de suelo.
@@ -103,8 +234,8 @@ function updateHud() {
   setText(hud.hpText, `🏰 ${Math.ceil(G.base.hp)}/${G.base.max}`);
   setStyle(hud.help, 'opacity', Math.max(0, Math.min(1, (10 - G.t) / 2)).toFixed(2));
   if (G.over && !lastOver) {
-    $('go-text').textContent = `Has llegado a la oleada ${G.wave} con ${G.buildings.length} torres`;
     $('gameover').classList.remove('hidden');
+    void onGameOver();
   }
   lastOver = G.over;
 }

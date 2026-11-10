@@ -28,13 +28,30 @@
 <div id="title" class="hidden">
   <h1 class="logo"><img src="/logo.webp" alt="Coinkeep" width="1200" height="400"></h1>
   <p class="tagline">Defiende el castillo · Guarda cada moneda</p>
+  <div class="menu">
+    <div class="diff" id="diff" role="radiogroup" aria-label="Dificultad"></div>
+    <button class="menu-btn" id="show-board">🏆 Clasificación</button>
+  </div>
+  <div class="board hidden" id="board">
+    <div class="board-head"><b>🏆 Clasificación</b><span id="board-diff"></span><button class="board-close" id="board-close" aria-label="Cerrar">✕</button></div>
+    <ol id="board-list"></ol>
+  </div>
   <p class="start">Toca la pantalla o pulsa una tecla para jugar</p>
   <p class="byline">Pablo Fernández · <i>vibe coded</i> con Claude Opus 5.5</p>
 </div>
 <div id="gameover" class="hidden">
   <h1>¡La base ha caído!</h1>
   <p id="go-text"></p>
-  <p class="dim">Toca la pantalla o pulsa una tecla para reintentar</p>
+  <form class="go-form hidden" id="go-form" autocomplete="off">
+    <input id="go-name" maxlength="16" placeholder="Tu nombre" aria-label="Tu nombre" enterkeyhint="send">
+    <button class="menu-btn" id="go-send" type="submit">Guardar récord</button>
+  </form>
+  <p class="go-msg" id="go-msg"></p>
+  <ol class="go-list" id="go-list"></ol>
+  <div class="go-buttons">
+    <button class="menu-btn primary" id="go-again">Jugar otra vez</button>
+    <button class="menu-btn" id="go-menu">Menú</button>
+  </div>
 </div>
 <script type="module" src="/src/main.ts"></script>
 </body>
