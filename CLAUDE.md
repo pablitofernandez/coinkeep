@@ -74,7 +74,7 @@ Problemas conocidos al probar:
 src/
   main.ts          bucle principal, pantalla de título (escena de exhibición con `showcase` y cámara orbitando: `view.orbit`), botones del HUD (🔊 sonido = M, 🎵 música = N), pantalla de carga, globales de depuración
   config.ts        TODO el equilibrio: mundo, jugador, oleadas, enemigos, parcelas, mejoras, ayudantes, forja
-  input.ts         teclado y joystick táctil
+  input.ts         teclado y joystick táctil; `preventBrowserZoom()` corta el zoom del móvil (Safari ignora `user-scalable=no`)
   devlog.ts        envío de logs (ver arriba)
   audio.ts         clase Sound: muestras de Kenney + tonos sintetizados + pasos del caballero
   music.ts         clase Music: música de fantasía sintetizada (flauta, arpa Karplus-Strong, cuerdas, chelo, tambores, reverberación; re menor, 16 compases)
@@ -146,6 +146,10 @@ Notas:
   - Las piezas estáticas se funden con `bake(grupo, clave)`, cacheado por clave. Los objetos llamados `flag` (ondean) o `crystal` (giran) se dejan aparte.
   - La vegetación usa `InstancedMesh`.
   - Se llegó a ~1.500 draw calls; ahora rondan unas 120–600.
+  - **Etiquetas HTML** (precios, barras de vida, estrellas…): las pinta `src/render/labels.ts` (`LabelRenderer`), no el `CSS2DRenderer` de Three.js. Solo toca el DOM si algo cambia, oculta lo que queda fuera de pantalla y redondea a píxeles enteros. Con 214 etiquetas tarda 0,6 ms por fotograma frente a 2,2 ms (en PC). Se siguen creando con `CSS2DObject`.
+  - **Sombras en móvil** cada 2 fotogramas (`view.shadowEvery`): ahorran casi la mitad de las llamadas de dibujo. Lo quieto no tiembla, porque el mapa viejo se usa con su propia matriz de luz.
+  - **Limitador de fotogramas** con umbral de 10 ms (`MIN_FRAME_MS`). Con 16,4 ms, cualquier fotograma que llegara un poco antes se saltaba y daba tirones a 30 fps en iPhone.
+  - El menú de desarrollo muestra los ms por fotograma de simulación, 3D y etiquetas. Ojo: los de 3D son solo de procesador; la tarjeta gráfica trabaja aparte.
 - Las paredes del Castle Kit van a lo largo del eje z, así que necesitan un giro extra de 90°.
 - **Decorado sólido:**
   - Los árboles sueltos, rocas («montañitas»), tocones y troncos del claro los coloca la **simulación** (`placeProps` en `sim.ts`, que da `G.props` y `G.solids`). La vista solo los dibuja (`syncProps`), así que cambian en cada partida.

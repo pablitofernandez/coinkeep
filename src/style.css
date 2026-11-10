@@ -4,6 +4,8 @@ html, body {
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 #app canvas { display: block; }
+/* botones y casillas: sin zoom por doble toque en el móvil, pero sin perder clics rápidos (ver preventBrowserZoom) */
+button, input, select, summary { touch-action: manipulation; }
 /* z-index propio: las etiquetas traen z-index altos y si no se pintarían encima del menú de desarrollo */
 .labels { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 1; }
 .labels * { pointer-events: none; }

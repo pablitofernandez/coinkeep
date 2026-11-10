@@ -3,7 +3,8 @@
 //  y sincronización de las entidades del estado con mallas.
 // ============================================================
 import * as THREE from 'three';
-import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
+import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+import { LabelRenderer } from './labels';
 import { BASE, PAD_INFO, WORLD } from '../config';
 import type { GameEvent, GameState, HelperKind, Point3 } from '../game/types';
 import {
@@ -58,7 +59,15 @@ interface Fx { obj: THREE.Object3D; life: number; max: number; update: (k: numbe
 
 export class View {
   readonly renderer: THREE.WebGLRenderer;
-  readonly labels: CSS2DRenderer;
+  readonly labels: LabelRenderer;
+  /** Milisegundos por fotograma (media suave): dibujo 3D y etiquetas HTML. Lo enseña el menú de desarrollo. */
+  readonly timing = { gl: 0, labels: 0 };
+  /**
+   * Cada cuántos fotogramas se recalcula el mapa de sombras. En móvil, 2: casi la mitad de llamadas de dibujo.
+   * Lo quieto no cambia; lo que se mueve actualiza su sombra a 30 fps (apenas se nota en vista cenital).
+   */
+  shadowEvery = MOBILE ? 2 : 1;
+  private frameNo = 0;
   readonly scene = new THREE.Scene();
   readonly camera: THREE.OrthographicCamera;
   /** Líneas de depuración (menú de desarrollo). */
@@ -117,7 +126,7 @@ export class View {
     this.renderer.toneMappingExposure = 1.05;
     container.appendChild(this.renderer.domElement);
 
-    this.labels = new CSS2DRenderer();
+    this.labels = new LabelRenderer();
     this.labels.domElement.className = 'labels';
     container.appendChild(this.labels.domElement);
     this.padArrow = document.createElement('div');
@@ -397,8 +406,18 @@ export class View {
     this.updateCamera(G, dt);
     this.debug.update(G);
 
+    // sombras en fotogramas alternos (móvil). Entre medias se reutiliza el mapa anterior con su propia
+    // matriz de luz, así que las sombras de lo quieto no se mueven aunque el sol siga al jugador
+    const sm = this.renderer.shadowMap;
+    sm.autoUpdate = false;
+    sm.needsUpdate = this.frameNo++ % this.shadowEvery === 0;
+    const t0 = performance.now();
     this.renderer.render(this.scene, this.camera);
+    const t1 = performance.now();
     this.labels.render(this.scene, this.camera);
+    const t2 = performance.now();
+    this.timing.gl += (t1 - t0 - this.timing.gl) * 0.1;
+    this.timing.labels += (t2 - t1 - this.timing.labels) * 0.1;
   }
 
   private syncPlayer(G: GameState, dt: number) {

@@ -19,6 +19,7 @@ export interface DevContext {
   time: TimeControl;
   restart: () => void;
   fps: () => number;
+  simMs: () => number;
 }
 
 const SFX: [SfxName, string][] = [
@@ -328,8 +329,10 @@ export function initDevPanel(ctx: DevContext) {
   function refresh() {
     const g = G();
     const info = view.renderer.info.render;
+    const t = ctx.view.timing;
     stats.textContent =
-      `${Math.round(ctx.fps())} FPS · ${info.calls} llamadas · ${(info.triangles / 1000).toFixed(0)}k triángulos · ` +
+      `${Math.round(ctx.fps())} FPS · ms por fotograma: simulación ${ctx.simMs().toFixed(1)} · 3D ${t.gl.toFixed(1)} · etiquetas ${t.labels.toFixed(1)} · ` +
+      `${info.calls} llamadas · ${(info.triangles / 1000).toFixed(0)}k triángulos · ` +
       `${g.enemies.length} enemigos · ${g.shots.length} disparos · ${g.drops.length} monedas · ${g.helpers.length} ayudantes`;
     cheatBadge.textContent = g.cheated ? '⚠ Partida con trampas: el registro irá marcado' : '';
     for (const f of refreshers) f();

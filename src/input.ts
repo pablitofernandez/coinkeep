@@ -4,6 +4,28 @@
 // ============================================================
 const JOY_RADIUS = 50;
 
+/**
+ * Impide que el navegador del móvil haga zoom en la página. Safari en iPhone ignora `user-scalable=no`
+ * del viewport (desde iOS 10), así que hay que cortar los gestos a mano:
+ *  - pellizco: eventos `gesture*` (solo Safari) y cualquier movimiento con dos o más dedos;
+ *  - doble toque: si un toque termina muy poco después del anterior, se anula su acción por defecto.
+ * Los botones y casillas no se tocan (perderían el segundo clic); llevan `touch-action: manipulation` en el CSS,
+ * que ya les quita el zoom por doble toque.
+ */
+export function preventBrowserZoom() {
+  const stop = (e: Event) => e.preventDefault();
+  for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, stop, { passive: false });
+  document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+  document.addEventListener('dblclick', stop, { passive: false });
+  let lastEnd = 0;
+  document.addEventListener('touchend', e => {
+    const now = e.timeStamp;
+    const control = (e.target as HTMLElement | null)?.closest?.('button, input, select, textarea, summary');
+    if (!control && now - lastEnd < 350) e.preventDefault();
+    lastEnd = now;
+  }, { passive: false });
+}
+
 /** ¿La tecla va a una casilla de texto? (entonces no es para el juego) */
 export const isTyping = (e: KeyboardEvent) => {
   const t = e.target as HTMLElement | null;

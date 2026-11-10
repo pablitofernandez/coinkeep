@@ -3,11 +3,14 @@ import { createGame, step } from './game/sim';
 import type { GameState, Vec } from './game/types';
 import { Sound } from './audio';
 import { DevLog } from './devlog';
-import { Input, isTyping } from './input';
+import { Input, isTyping, preventBrowserZoom } from './input';
 import { loadAssets } from './render/assets';
 import { CAM_ELEVATION_SIN, View, fmt } from './render/view';
 
 const $ = (id: string) => document.getElementById(id)!;
+
+// sin zoom del navegador en el móvil (doble toque o pellizco): el juego ocupa la pantalla entera
+preventBrowserZoom();
 
 // --- carga de modelos 3D (antes de crear la escena)
 const loading = $('loading');
@@ -118,10 +121,14 @@ const time: TimeControl = { scale: 1, paused: false, stepOnce: false, turboTo: 0
 
 // --- bucle principal (paso fijo para que la simulación sea estable)
 // Se limita a ~60 fps: en pantallas de 120 Hz el navegador pediría el doble de frames.
+// El umbral tiene mucho margen (10 ms, no 16,7): con uno ajustado, un fotograma que llegaba una
+// pizca antes de tiempo se saltaba entero y el juego daba tirones a 30 fps (se notaba en iPhone).
+// A 120 Hz se pinta uno de cada dos (60 fps); a 60 Hz, todos; a 90 Hz, todos.
 const FIXED = 1 / 60;
-const MIN_FRAME_MS = 1000 / 61;
+const MIN_FRAME_MS = 10;
 let acc = 0, last = performance.now();
 let fps = 60, fpsFrames = 0, fpsT = performance.now();
+let simMs = 0;   // tiempo de simulación por fotograma (media suave), para el menú de desarrollo
 function frame(now: number) {
   requestAnimationFrame(frame);
   if (now - last < MIN_FRAME_MS) return;
@@ -145,8 +152,10 @@ function frame(now: number) {
     if (time.stepOnce) { step(G, FIXED, dir); simDt = FIXED; time.stepOnce = false; }
     acc = 0;
   } else {
+    const t0 = performance.now();
     acc += simDt;
     while (acc >= FIXED) { step(G, FIXED, dir); acc -= FIXED; }
+    simMs += (performance.now() - t0 - simMs) * 0.1;
   }
   sound.handle(G, G.events);
   view.render(G, simDt);
@@ -193,6 +202,6 @@ Object.assign(window, {
 // --- menú de desarrollador (solo con `npm run dev`; F1 o º, o tres toques en el contador de oleada)
 if (import.meta.env.DEV) {
   import('./dev/panel').then(m => m.initDevPanel({
-    game: () => G, view, sound, devlog, time, restart: () => (inTitle ? startGame() : restart()), fps: () => fps,
+    game: () => G, view, sound, devlog, time, restart: () => (inTitle ? startGame() : restart()), fps: () => fps, simMs: () => simMs,
   }));
 }
