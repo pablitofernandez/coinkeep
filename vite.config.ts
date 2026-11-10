@@ -33,6 +33,9 @@ function gameLogPlugin(): Plugin {
   };
 }
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
+  // En producción, rutas relativas: el juego funciona en cualquier carpeta
+  // (GitHub Pages lo sirve en /coinkeep/). Modelos y sonidos usan import.meta.env.BASE_URL.
+  base: command === 'build' ? './' : '/',
   plugins: [gameLogPlugin()],
-});
+}));

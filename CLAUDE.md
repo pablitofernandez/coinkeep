@@ -198,7 +198,10 @@ Pregunta al usuario antes de cambiar el equilibrio. Prefiere ver los datos y ele
 ## Forma de trabajar con este usuario
 
 - Escribe en español, en tono cercano, y explica los cambios en lenguaje de juego, no de código.
-- **No hay commits todavía.** El repo (`master`) tiene todo sin seguimiento. No hagas commit ni push salvo que lo pida.
+- **Repo público:** https://github.com/pablitofernandez/coinkeep (rama `main`, licencia MIT).
+  - Autor de los commits: Pablo Fernández <morfellu@gmail.com>. Está configurado solo en este repo; el global es el correo del trabajo y no debe salir en público.
+  - Cada commit lleva `Co-Authored-By: Claude Opus 5.5`.
+  - No hagas commit ni push salvo que lo pida. El proyecto se presenta como *vibe coded* con Claude (ver README).
 - Cualquier descarga requiere su permiso explícito.
 - Comprueba en el navegador cuando el cambio se vea: captura con `zoom` sobre la zona y `advance()` para mover el juego.
 - En Windows con Git Bash, los heredocs largos con comillas fallan. Escribe los scripts de edición con la herramienta Write en el scratchpad, o usa Edit directamente.
