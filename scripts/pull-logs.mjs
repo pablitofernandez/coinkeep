@@ -6,24 +6,41 @@
 //  Necesita la clave SECRETA de Supabase en .env.local (nunca se sube):
 //    SUPABASE_SECRET_KEY=sb_secret_…
 //  La URL la toma de .env (VITE_SUPABASE_URL).
+//
+//  OJO: las filas las puede escribir cualquiera (clave pública). Todo pasa por
+//  clean-log.mjs, que se queda solo con los campos y formatos que manda el juego.
 // ============================================================
 import fs from 'node:fs';
 import path from 'node:path';
+import { cleanRow, cleanWave } from './clean-log.mjs';
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/(\w:)/, '$1')), '..');
-const env = {};
-for (const f of ['.env', '.env.local']) {
-  const p = path.join(root, f);
-  if (!fs.existsSync(p)) continue;
+
+/** Lee un archivo .env sencillo (CLAVE=valor). */
+function readEnv(file) {
+  const env = {};
+  const p = path.join(root, file);
+  if (!fs.existsSync(p)) return env;
   for (const line of fs.readFileSync(p, 'utf8').split(/\r?\n/)) {
     const m = /^\s*([\w]+)\s*=\s*(.*?)\s*$/.exec(line);
     if (m && !line.trim().startsWith('#')) env[m[1]] = m[2].replace(/^["']|["']$/g, '');
   }
+  return env;
 }
-const URL_ = (env.VITE_SUPABASE_URL ?? '').replace(/\/$/, '');
-const KEY = env.SUPABASE_SECRET_KEY;
+const pub = readEnv('.env'), local = readEnv('.env.local');
+const URL_ = (local.VITE_SUPABASE_URL ?? pub.VITE_SUPABASE_URL ?? '').replace(/\/$/, '');
+// la clave secreta SOLO de .env.local: .env se sube al repo público
+const KEY = local.SUPABASE_SECRET_KEY;
+if (pub.SUPABASE_SECRET_KEY) {
+  console.error('¡Cuidado! Hay una SUPABASE_SECRET_KEY en .env, que se sube al repo público. Muévela a .env.local (y cámbiala en Supabase si ya se subió).');
+  process.exit(1);
+}
 if (!URL_ || !KEY) {
   console.error('Falta VITE_SUPABASE_URL en .env o SUPABASE_SECRET_KEY en .env.local');
+  process.exit(1);
+}
+if (!URL_.startsWith('https://')) {
+  console.error('VITE_SUPABASE_URL debe empezar por https:// (la clave secreta no se manda sin cifrar)');
   process.exit(1);
 }
 const headers = { apikey: KEY, ...(KEY.startsWith('eyJ') ? { Authorization: `Bearer ${KEY}` } : {}) };
@@ -34,49 +51,72 @@ const cursorFile = path.join(dir, '.cursor');
 let cursor = fs.existsSync(cursorFile) ? Number(fs.readFileSync(cursorFile, 'utf8')) || 0 : 0;
 
 // 1) filas nuevas desde la última descarga, por páginas
-const rows = [];
+const rawRows = [];
 for (;;) {
   const r = await fetch(`${URL_}/rest/v1/game_logs?id=gt.${cursor}&order=id.asc&limit=1000`, { headers });
-  if (!r.ok) { console.error('Error de Supabase:', r.status, await r.text()); process.exit(1); }
+  if (!r.ok) { console.error('Error de Supabase:', r.status, (await r.text()).slice(0, 300)); process.exit(1); }
   const page = await r.json();
-  rows.push(...page);
+  if (!Array.isArray(page)) { console.error('Respuesta inesperada de Supabase'); process.exit(1); }
+  rawRows.push(...page);
   if (page.length < 1000) break;
-  cursor = page[page.length - 1].id;
+  const lastId = page[page.length - 1]?.id;
+  if (!Number.isInteger(lastId)) { console.error('Respuesta inesperada de Supabase'); process.exit(1); }
+  cursor = lastId;
 }
-if (!rows.length) { console.log('No hay partidas nuevas.'); process.exit(0); }
+if (!rawRows.length) { console.log('No hay partidas nuevas.'); process.exit(0); }
 
-// 2) juntar por partida (añadiendo a lo ya descargado de esa partida)
+// 2) limpiar: lo que no tenga la forma del juego se descarta
+const rows = [];
+let badRows = 0, badWaves = 0;
+for (const raw of rawRows) {
+  const row = cleanRow(raw);
+  if (!row) { badRows++; continue; }
+  badWaves += row.badWaves;
+  rows.push(row);
+}
+
+// 3) juntar por partida (añadiendo a lo ya descargado de esa partida)
 const bySession = new Map();
 for (const row of rows) {
   if (!bySession.has(row.session)) bySession.set(row.session, []);
   bySession.get(row.session).push(row);
 }
 const stamp = iso => iso.slice(0, 19).replace('T', '_').replace(/:/g, '-');
-let created = 0, updated = 0;
+let created = 0, updated = 0, failed = 0;
 for (const [session, list] of bySession) {
-  list.sort((a, b) => a.seq - b.seq);
-  const existing = fs.readdirSync(dir).find(f => f.endsWith(`_${session.slice(0, 8)}.json`));
-  const file = existing ?? `${stamp(list[0].created_at)}_${session.slice(0, 8)}.json`;
-  const p = path.join(dir, file);
-  const log = existing ? JSON.parse(fs.readFileSync(p, 'utf8')) : {
-    session, player: list[0].player, startedAt: list[0].created_at,
-    version: list[0].version, difficulty: list[0].difficulty, cheats: false,
-    device: { mobile: list[0].mobile, screen: list[0].screen, platform: list[0].platform },
-    waves: [], events: [],
-  };
-  for (const row of list) {
-    const seen = new Set(log.waves.map(w => w.wave));
-    for (const w of row.data.waves ?? []) if (!seen.has(w.wave)) log.waves.push(w);
-    log.events.push(`${row.seq}:${row.event}@${row.wave}`);
-    log.cheats ||= row.cheats;
-    log.updatedAt = row.created_at;
-    log.result = { over: row.event === 'over', left: row.event === 'left', waveReached: row.wave, seconds: row.seconds, towers: row.data.now?.towers?.split(' ').filter(Boolean).length ?? 0 };
-    log.now = row.data.now;
-    log.totals = row.data.totals;
+  try {
+    list.sort((a, b) => a.seq - b.seq);
+    const existing = fs.readdirSync(dir).find(f => f.endsWith(`_${session.slice(0, 8)}.json`));
+    const file = existing ?? `${stamp(list[0].created_at)}_${session.slice(0, 8)}.json`;
+    const p = path.join(dir, file);
+    const log = existing ? JSON.parse(fs.readFileSync(p, 'utf8')) : {
+      session, player: list[0].player, startedAt: list[0].created_at,
+      version: list[0].version, difficulty: list[0].difficulty, cheats: false,
+      device: { mobile: list[0].mobile, screen: list[0].screen, platform: list[0].platform },
+      waves: [], events: [],
+    };
+    // los archivos descargados antes de existir este filtro también pasan por él
+    log.waves = (Array.isArray(log.waves) ? log.waves : []).map(cleanWave).filter(Boolean);
+    if (!Array.isArray(log.events)) log.events = [];
+    for (const row of list) {
+      const seen = new Set(log.waves.map(w => w.wave));
+      for (const w of row.data.waves) if (!seen.has(w.wave)) log.waves.push(w);
+      log.events.push(`${row.seq}:${row.event}@${row.wave}`);
+      log.cheats ||= row.cheats;
+      log.updatedAt = row.created_at;
+      log.result = { over: row.event === 'over', left: row.event === 'left', waveReached: row.wave, seconds: row.seconds, towers: row.data.now?.towers.split(' ').filter(Boolean).length ?? 0 };
+      log.now = row.data.now;
+      log.totals = row.data.totals;
+    }
+    log.waves.sort((a, b) => a.wave - b.wave);
+    fs.writeFileSync(p, JSON.stringify(log, null, 1));
+    if (existing) updated++; else created++;
+  } catch (e) {
+    failed++;
+    console.error(`No se pudo guardar la partida ${session.slice(0, 8)}: ${e.message}`);
   }
-  log.waves.sort((a, b) => a.wave - b.wave);
-  fs.writeFileSync(p, JSON.stringify(log, null, 1));
-  if (existing) updated++; else created++;
 }
-fs.writeFileSync(cursorFile, String(rows[rows.length - 1].id));
-console.log(`${rows.length} filas · ${created} partidas nuevas, ${updated} actualizadas → logs/remote/`);
+fs.writeFileSync(cursorFile, String(rawRows[rawRows.length - 1].id));
+console.log(`${rawRows.length} filas · ${created} partidas nuevas, ${updated} actualizadas → logs/remote/`);
+if (badRows || badWaves) console.warn(`⚠ Descartadas por no tener el formato del juego: ${badRows} filas y ${badWaves} oleadas. Puede ser basura metida a mano en la tabla: revísala en el panel de Supabase.`);
+if (failed) console.warn(`⚠ ${failed} partidas no se pudieron guardar.`);

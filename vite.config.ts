@@ -22,6 +22,13 @@ function gameLogPlugin(): Plugin {
     configureServer(server) {
       server.middlewares.use('/__log', (req, res) => {
         if (req.method !== 'POST') { res.statusCode = 405; res.end(); return; }
+        // Solo el propio juego. Exigir JSON obliga al navegador a preguntar antes (CORS), y Vite no
+        // deja pasar a otras webs; además, si viene de otra web (Origin distinto), fuera.
+        const type = String(req.headers['content-type'] ?? '');
+        const origin = req.headers.origin;
+        let sameOrigin = true;
+        if (origin) { try { sameOrigin = new URL(origin).host === req.headers.host; } catch { sameOrigin = false; } }
+        if (!type.startsWith('application/json') || !sameOrigin) { res.statusCode = 403; res.end(); return; }
         let body = '';
         req.on('data', chunk => { body += chunk; if (body.length > 5_000_000) req.destroy(); });
         req.on('end', () => {

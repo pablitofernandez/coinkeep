@@ -29,9 +29,13 @@ const headers = (extra: Record<string, string> = {}): Record<string, string> => 
 /** Conexión con Supabase, compartida con la telemetría (telemetry.ts). */
 export const SUPABASE = { url: URL ?? '', enabled: leaderboardEnabled, headers };
 
-/** Limpia el nombre: sin caracteres de control ni espacios de más, 1–16 caracteres. */
+/**
+ * Limpia el nombre: sin caracteres de control, invisibles ni de dirección de texto, sin espacios de más,
+ * 1–16 caracteres. El servidor comprueba lo mismo (supabase/scores.sql): si cambias uno, cambia el otro.
+ */
 export function cleanName(s: string) {
-  return s.replace(/[\u0000-\u001f\u007f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 16);
+  return s.replace(/[\u0000-\u001f\u007f-\u009f<>​-‏‪-‮⁦-⁩﻿]/g, '')
+    .replace(/\s+/g, ' ').trim().slice(0, 16).trim();
 }
 
 export const savedName = () => { try { return localStorage.getItem(NAME_KEY) ?? ''; } catch { return ''; } };

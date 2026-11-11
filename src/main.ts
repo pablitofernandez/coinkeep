@@ -320,20 +320,23 @@ function turbo() {
   }
 }
 
-// para depurar desde la consola
-Object.assign(window, {
-  game: () => G,
-  view,
-  sound,
-  /** Avanza la simulación N segundos de golpe (útil para pruebas desde la consola). */
-  advance: (seconds: number, dir: Vec = { x: 0, y: 0 }) => {
-    for (let t = 0; t < seconds; t += FIXED) step(G, FIXED, dir);
-    sound.handle(G, G.events);
-    view.render(G, FIXED);
-    devlog.update(G);
-    telemetry.update(G);
-  },
-});
+// para depurar desde la consola (solo con `npm run dev`: en la versión publicada serían trucos gratis
+// y las partidas tramposas llegarían a la clasificación como limpias)
+if (import.meta.env.DEV) {
+  Object.assign(window, {
+    game: () => G,
+    view,
+    sound,
+    /** Avanza la simulación N segundos de golpe (útil para pruebas desde la consola). */
+    advance: (seconds: number, dir: Vec = { x: 0, y: 0 }) => {
+      for (let t = 0; t < seconds; t += FIXED) step(G, FIXED, dir);
+      sound.handle(G, G.events);
+      view.render(G, FIXED);
+      devlog.update(G);
+      telemetry.update(G);
+    },
+  });
+}
 
 // --- menú de desarrollador (solo con `npm run dev`; F1 o º, o tres toques en el contador de oleada)
 if (import.meta.env.DEV) {
