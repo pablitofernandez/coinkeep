@@ -26,6 +26,9 @@ export const CAM_ELEVATION_SIN = CAM_OFFSET.y / CAM_OFFSET.length();
 const MAX_COINS = 4000;
 const STACK_STEP = 0.055;   // vertical spacing of the coins in the stack
 const SHOOT_POSE = 0.5;     // seconds the crossbow shooting gesture lasts
+const FOREST_SECTORS = 12;  // angular slices of the border forest (culled separately)
+const SECTOR_SPECIES = 3;   // tree models used in each slice
+const CULL_MARGIN = 3;      // world units past the screen edge before an enemy is hidden (covers its height and shadow)
 
 function label(className: string, html = ''): CSS2DObject {
   const el = document.createElement('div');
@@ -268,18 +271,28 @@ export class View {
     // dense forest: jittered grid, with an irregular edge
     const outer = 30, step = 1.2;    // the camera never reaches beyond this
     const edge = (a: number) => R + Math.sin(a * 3 + 3.1) * 0.6 + Math.sin(a * 7 + 6.2) * 0.3;
-    const edgeSpots: THREE.Matrix4[] = [], deepSpots: THREE.Matrix4[] = [];
+    // The ring is split into angular sectors, each with its own instanced meshes: an instanced mesh is
+    // culled as a whole, so a single ring-sized one was never culled and every tree went through the GPU
+    // every frame. Each sector uses a few species (rotating), which keeps the draw calls low.
+    const sectors = () => Array.from({ length: FOREST_SECTORS }, () => [] as THREE.Matrix4[]);
+    const edgeSpots = sectors(), deepSpots = sectors();
     for (let gx = -outer; gx <= outer; gx += step) for (let gz = -outer; gz <= outer; gz += step) {
       const x = gx + (Math.random() - 0.5) * step * 0.8, z = gz + (Math.random() - 0.5) * step * 0.8;
-      const r = Math.hypot(x, z);
-      if (r > outer || r < edge(Math.atan2(z, x))) continue;
+      const r = Math.hypot(x, z), a = Math.atan2(z, x);
+      if (r > outer || r < edge(a)) continue;
       const sc = 1.0 + Math.random() * 0.6 + Math.min(0.5, (r - R) * 0.03);
-      (r < R + 3.5 ? edgeSpots : deepSpots).push(place(BASE.x + x, BASE.y + z, sc, 0.12));
+      const s = Math.min(FOREST_SECTORS - 1, Math.floor((a + Math.PI) / (Math.PI * 2) * FOREST_SECTORS));
+      (r < R + 3.5 ? edgeSpots : deepSpots)[s].push(place(BASE.x + x, BASE.y + z, sc, 0.12));
     }
-    // forest edge: variety and shadows; deeper in, the simplest models without shadows (much cheaper)
-    scatter(['tree_pineDefaultA', 'tree_pineRoundA', 'tree_default', 'tree_pineDefaultB', 'tree_oak', 'tree_pineRoundB', 'tree_cone'], edgeSpots, !MOBILE);
-    // in the deep forest trunks aren't visible: canopies only
-    scatter(['tree_pineTallA', 'tree_pineTallB', 'tree_pineTallC', 'tree_pineTallD', 'tree_fat'], deepSpots, false, ['woodBark', 'woodBarkDark']);
+    const species = (names: string[], s: number) => Array.from({ length: SECTOR_SPECIES }, (_, k) => names[(s + k) % names.length]);
+    const EDGE = ['tree_pineDefaultA', 'tree_pineRoundA', 'tree_default', 'tree_pineDefaultB', 'tree_oak', 'tree_pineRoundB', 'tree_cone'];
+    const DEEP = ['tree_pineTallA', 'tree_pineTallB', 'tree_pineTallC', 'tree_pineTallD', 'tree_fat'];
+    for (let s = 0; s < FOREST_SECTORS; s++) {
+      // forest edge: variety and shadows; deeper in, the simplest models without shadows (much cheaper)
+      scatter(species(EDGE, s), edgeSpots[s], !MOBILE);
+      // in the deep forest trunks aren't visible: canopies only
+      scatter(species(DEEP, s), deepSpots[s], false, ['woodBark', 'woodBarkDark']);
+    }
     // lone trees, rocks, stumps and logs in the clearing are placed by the simulation (they're solid): see syncProps
   }
 
@@ -452,6 +465,12 @@ export class View {
     aimCrossbow(m, k, recoil);
   }
 
+  /** Is this ground point inside the view (plus a margin)? Uses the camera as it was drawn last frame. */
+  private onScreen(x: number, y: number) {
+    const cam = this.camera, p = this.tmpP.set(x, 1, y).project(cam);
+    return Math.abs(p.x) < 1 + CULL_MARGIN * cam.zoom / cam.right && Math.abs(p.y) < 1 + CULL_MARGIN * cam.zoom / cam.top;
+  }
+
   private syncEnemies(G: GameState, dt: number) {
     const seen = new Set<number>();
     for (const e of G.enemies) {
@@ -472,6 +491,9 @@ export class View {
       const ch = v.ch;
       const dx = BASE.x - e.x, dy = BASE.y - e.y;
       const em = v.em;
+      // off-screen enemies are neither drawn nor animated (most of a big wave is outside the view)
+      const onScreen = this.onScreen(e.x, e.y);
+      ch.root.visible = onScreen;
       // flyers bob up and down a little as they flap their wings
       ch.root.position.set(e.x, e.fly ? e.fly + Math.sin(this.time * 6 + e.id) * 0.06 : 0, e.y);
       ch.root.rotation.y = Math.atan2(dx, dy);
@@ -484,7 +506,7 @@ export class View {
       const flash = e.hit > 0 ? '#ffffff' : e.healed > 0 ? '#2fae4a' : '';
       if (flash !== v.flash) for (const m of ch.mats) m.emissive.set(flash || '#000000');
       v.flash = flash;
-      ch.update(dt);
+      if (onScreen) ch.update(dt);
       v.hp.visible = e.hp < e.maxHp;
       setWidth(v.hp.element.firstChild as HTMLElement, Math.max(0, e.hp / e.maxHp * 100));
     }
@@ -492,11 +514,13 @@ export class View {
       // dies: falling animation, then sinks into the ground
       removeLabels(v.ch.root);
       v.ch.root.remove(v.hp);
+      this.enemies.delete(id);
+      // died out of sight: nothing to show
+      if (!v.ch.root.visible) { this.scene.remove(v.ch.root); v.ch.dispose(); continue; }
       for (const m of v.ch.mats) m.emissive.set('#000000');
       v.ch.root.scale.setScalar(1);
       v.ch.once(v.em.die, 1.6, true);
       this.dying.push({ ch: v.ch, t: 0, y0: v.ch.root.position.y });
-      this.enemies.delete(id);
     }
     for (const d of this.dying) {
       d.t += dt;

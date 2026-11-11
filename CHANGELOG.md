@@ -2,6 +2,11 @@
 
 What changes in Coinkeep from one version to the next, written for players. The game shows this same list on the title screen (**📜 What's new**). The Spanish version is in [CHANGELOG.es.md](CHANGELOG.es.md).
 
+## 0.5.2 — 2026-11-11
+
+### Fixes
+- Smoother everywhere: the forest and enemies outside the screen are no longer drawn, and movement no longer hitches now and then on 60 Hz screens.
+
 ## 0.5.1 — 2026-11-11
 
 ### Fixes

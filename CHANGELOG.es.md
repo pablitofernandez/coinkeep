@@ -2,6 +2,11 @@
 
 Lo que cambia en Coinkeep de una versión a otra, contado para jugadores. El juego muestra esta misma lista en la portada (**📜 Novedades**). La versión en inglés está en [CHANGELOG.md](CHANGELOG.md).
 
+## 0.5.2 — 2026-11-11
+
+### Arreglos
+- Más fluido en general: el bosque y los enemigos que quedan fuera de la pantalla ya no se dibujan, y en pantallas de 60 Hz el movimiento ya no da tirones de vez en cuando.
+
 ## 0.5.1 — 2026-11-11
 
 ### Arreglos

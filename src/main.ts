@@ -363,8 +363,11 @@ let simMs = 0;   // simulation time per frame (smoothed average), for the develo
 function frame(now: number) {
   requestAnimationFrame(frame);
   if (now - last < MIN_FRAME_MS) return;
-  const dt = Math.min(0.1, (now - last) / 1000);
+  let dt = Math.min(0.1, (now - last) / 1000);
   last = now;
+  // On a 60 Hz screen the frame time wobbles around 16.7 ms. With the raw value the fixed-step loop
+  // sometimes ran 0 steps and then 2: a visible hitch at a steady 60 fps. Close enough counts as one step.
+  if (Math.abs(dt - FIXED) < 0.002) dt = FIXED;
   fpsFrames++;
   if (now - fpsT >= 500) { fps = fpsFrames * 1000 / (now - fpsT); fpsFrames = 0; fpsT = now; }
   if (inTitle) {
