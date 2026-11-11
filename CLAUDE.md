@@ -188,7 +188,9 @@ Chosen on the title screen (Normal / Hard / Nightmare) and saved in `localStorag
 - `grow`, `mid` and `late`: how much health grows per wave (up to 15, up to 30 and beyond).
 - `count`: enemy count multiplier per wave.
 - `loot`: loot multiplier. Loot comes from a fixed curve (`lootHp`), not from health. **Money is what decides difficulty the most**: with more loot, towers and the forge grow faster than enemies and the game breaks (there is a "cliff": small changes go from losing at wave 30 to never losing).
-- Tuned with the autopilot (which collects better than a person): Nightmare loses around wave 20, Hard around 33 and Normal around 50.
+- Autopilot (collects better than a person), 8 runs each, after v0.4.1: Nightmare median wave 23, Hard 33, Normal bimodal (38–41 or 66–75: the economy "cliff"). Before v0.4.1: 20 / 31 / 40.
+- **Real players lose much earlier than the autopilot**: in the published version (v0.3–0.4.0, 27 games, 3 players) the medians were Normal 20, Hard 15, Nightmare 15. Target for humans: Normal ~30, Hard ~20, Nightmare ~15.
+- Benchmark from the console: import `sim.ts`, `cheats.ts` (exact URLs, see below), then loop `createGame(diff)` with `G.dev.autoplay = true` and `step(G, 1/60, autopilotDir(G))` until `G.over`, clearing `G.events` each step. Headless games don't send logs. With the browser pane hidden, yield with `setTimeout` and poll a `window.__result` instead of awaiting for more than ~40 s.
 - **To simulate from the console**, import the modules with the exact URL the page uses (`performance.getEntriesByType('resource')`, with its `?t=`). Importing plain `/src/config.ts` gives **another copy** of the module and the changes don't reach the simulation.
 
 ## Global leaderboard (Supabase)
@@ -241,7 +243,14 @@ Analysis of the last recorded game (waves 1–18; the user actually reached over
 - **The knight matters little from wave 7 on.**
 - **Unspent money piles up** (350–480 coins on the tables): the economy is way ahead of the difficulty.
 
-Adjustments proposed to the user, **not yet applied or approved**:
+Analysis of the published version (2026-11-11, 27 finished games, see Difficulty):
+- All difficulties stall around wave 15; Hard and Nightmare play almost the same.
+- **Bosses are the wall:** 17 of 27 games ended on a boss wave (10, 15, 20). Players reach them with the castle already hurt (it didn't heal between waves; «Repair» gets 0–5 % of the spending on Nightmare), the boss holds the line and the wave piles up.
+- Archers do 55–78 % of the kills and get maxed early; cannon 0–19 %; dog 1–12 %. The peon brings 21–51 % of the income when bought, but most players never buy it, and 250–450 coins sit on the tables from wave 15.
+- **Applied in v0.4.1** (approved): clearing a whole wave heals the castle 12 % of max (`WAVES.clearHeal`), boss health ×6 instead of ×8 (`WAVES.bossHp`).
+- Still pending (user to choose): separate the difficulties (Normal/Hard kinder: more loot, fewer enemies), make the peon known (earlier or cheaper first time), dog scaling, a reason to build cannons.
+
+Older adjustments proposed to the user, **not yet applied or approved**:
 1. Forge: base cost from 50 to 120 and per-level multiplier from 1.5 to 1.8.
 2. Peon: cost from 150 to 220, or collect 25 % less.
 3. Dog: damage scaling with the wave and a cheaper first upgrade.

@@ -2,6 +2,12 @@
 
 What changes in Coinkeep from one version to the next, written for players. The game shows this same list on the title screen (**📜 What's new**). The Spanish version is in [CHANGELOG.es.md](CHANGELOG.es.md).
 
+## 0.4.1 — 2026-11-11
+
+### Balance
+- Wiping out a whole wave now patches up the castle: it recovers 12% of its maximum health.
+- Bosses are a bit less tough: 6 times the health of a warrior instead of 8.
+
 ## 0.4.0 — 2026-11-11
 
 ### New

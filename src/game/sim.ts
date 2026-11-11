@@ -172,6 +172,12 @@ function updateWaves(G: GameState, dt: number) {
   if (G.wave > 0 && G.spawnLeft === 0 && G.enemies.length === 0 && G.waveTimer > WAVES.breakTime) {
     G.waveTimer = WAVES.breakTime;
     text(G, G.player.x, G.player.y, t('float.waveCleared'), '#7f7', 20);
+    // reward for clearing the wave: the castle patches itself up a little
+    const heal = Math.min(Math.round(G.base.max * WAVES.clearHeal), Math.ceil(G.base.max - G.base.hp));
+    if (heal > 0) {
+      G.base.hp = Math.min(G.base.max, G.base.hp + heal);
+      text(G, BASE.x, BASE.y, t('float.castleHeal', { n: heal }), '#7f7', 18);
+    }
     sfx(G, 'waveClear');
   }
   if (G.waveTimer <= 0) {

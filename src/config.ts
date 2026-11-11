@@ -38,6 +38,8 @@ export const WAVES = {
   interval: 40,           // max seconds between waves (if you don't clear the previous one)
   breakTime: 8,           // pause after wiping out a whole wave
   bossEvery: 5,
+  bossHp: 6,              // boss health = this × the wave's warrior
+  clearHeal: 0.12,        // wiping out a whole wave heals the castle by this fraction of its max health
   count: (wave: number) => 4 + wave * 2,
   spawnWindow: 13,        // seconds over which the wave is spread
 };
@@ -101,7 +103,7 @@ export const waveCount = (wave: number, diff: Difficulty) => Math.round(WAVES.co
 
 export function enemyStats(wave: number, boss: boolean, kind: EnemyKind = 'zombie', diff: Difficulty = 'normal') {
   const baseHp = Math.ceil(waveHp(wave, diff));
-  const hp = baseHp * (boss ? 8 : 1);
+  const hp = baseHp * (boss ? WAVES.bossHp : 1);
   // the reward grows with the fixed loot curve (not linearly with the wave)
   const baseValue = Math.max(2, Math.round(Math.pow(lootHp(wave), 0.8) * DIFFICULTY[diff].loot));
   const k = ENEMY_KINDS[boss ? 'zombie' : kind];

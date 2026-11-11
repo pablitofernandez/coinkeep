@@ -2,6 +2,12 @@
 
 Lo que cambia en Coinkeep de una versión a otra, contado para jugadores. El juego muestra esta misma lista en la portada (**📜 Novedades**). La versión en inglés está en [CHANGELOG.md](CHANGELOG.md).
 
+## 0.4.1 — 2026-11-11
+
+### Equilibrio
+- Acabar con toda una oleada repara un poco el castillo: recupera el 12 % de su vida máxima.
+- Los jefes aguantan algo menos: 6 veces la vida de un guerrero en lugar de 8.
+
 ## 0.4.0 — 2026-11-11
 
 ### Novedades
