@@ -2,6 +2,11 @@
 
 What changes in Coinkeep from one version to the next, written for players. The game shows this same list on the title screen (**📜 What's new**). The Spanish version is in [CHANGELOG.es.md](CHANGELOG.es.md).
 
+## 0.5.1 — 2026-11-11
+
+### Fixes
+- Much smoother in long games: enemies, bats above all, are now far cheaper to draw. Around wave 40 the game could slow to a crawl.
+
 ## 0.5.0 — 2026-11-11
 
 ### New

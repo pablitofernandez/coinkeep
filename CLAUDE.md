@@ -158,6 +158,7 @@ Notes:
 - Performance (on mobile especially):
   - Static pieces are merged with `bake(group, key)`, cached by key. Objects named `flag` (they wave) or `crystal` (they spin) are left separate.
   - Vegetation uses `InstancedMesh`.
+  - **Characters are merged at load time** (`mergeParts` in `assets.ts`): sibling parts with the same material and skeleton become one mesh. The bat converted from FBX came in 101 pieces (~200 draw calls per bat with shadows; around wave 40 there were 2,500 draw calls and 25–35 ms per frame on PC). Now: bat 6, warrior 5, minion 3, mage 4. Check `view.renderer.info.render.calls` after adding a model.
   - It reached ~1,500 draw calls; now it is around 120–600.
   - **HTML labels** (prices, health bars, stars…): drawn by `src/render/labels.ts` (`LabelRenderer`), not by Three.js's `CSS2DRenderer`. It only touches the DOM when something changes, hides what is off screen and rounds to whole pixels. With 214 labels it takes 0.6 ms per frame versus 2.2 ms (on PC). They are still created with `CSS2DObject`.
   - **Shadows on mobile** every 2 frames (`view.shadowEvery`): saves almost half the draw calls. Still objects don't shimmer, because the old map is used with its own light matrix.

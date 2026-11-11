@@ -83,12 +83,67 @@ export async function loadAssets(onProgress: (k: number) => void = () => {}) {
         if (!known) sharedMats.set(key, s);
       }
     });
+    if (skinned) mergeParts(gltf.scene);
     assets.set(n, { scene: gltf.scene, clips: gltf.animations, skinned });
     onProgress(++done / list.length);
   }));
 }
 
 const skinnedMesh = (m: THREE.Mesh) => (m as THREE.SkinnedMesh).isSkinnedMesh === true;
+
+/** What has to match for two meshes to be drawn as one: same look and, if skinned, same skeleton and bind pose. */
+function partKey(m: THREE.Mesh): string | null {
+  if (Array.isArray(m.material)) return null;
+  const s = m.material as THREE.MeshStandardMaterial;
+  const look = [s.type, s.color?.getHexString(), s.map?.uuid, s.transparent, s.side, s.vertexColors, s.emissive?.getHexString(), s.opacity].join('|');
+  const g = m.geometry;
+  const attrs = Object.keys(g.attributes).sort().join(',') + (g.index ? '+i' : '');
+  if (!skinnedMesh(m)) return `${m.parent?.uuid}|static|${look}|${attrs}`;
+  const sk = m as THREE.SkinnedMesh;
+  return `${m.parent?.uuid}|${sk.skeleton.bones.map(b => b.uuid).join(',')}|${sk.bindMatrix.elements.join(',')}|${m.matrix.elements.join(',')}|${look}|${attrs}`;
+}
+
+/**
+ * Merges the sibling parts of a character that share material (and skeleton): each part is a draw call,
+ * twice with shadows. The bat converted from FBX came in 101 pieces of 5 colours (~200 draw calls per bat:
+ * with a dozen bats on screen the game dropped to a crawl); KayKit skeletons come in ~9 parts.
+ */
+function mergeParts(root: THREE.Object3D) {
+  root.updateMatrixWorld(true);
+  const groups = new Map<string, THREE.Mesh[]>();
+  root.traverse(o => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    const key = partKey(m);
+    if (!key) return;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(m);
+  });
+  for (const parts of groups.values()) {
+    if (parts.length < 2) continue;
+    const first = parts[0], parent = first.parent!;
+    const skinned = skinnedMesh(first);
+    // skinned parts are already in the same bind space; static ones get their local transform baked in
+    const geos = parts.map(p => skinned ? p.geometry : p.geometry.clone().applyMatrix4(p.matrix));
+    const merged = mergeGeometries(geos, false);
+    if (!merged) continue;
+    let mesh: THREE.Mesh;
+    if (skinned) {
+      const sk = first as THREE.SkinnedMesh;
+      const sm = new THREE.SkinnedMesh(merged, first.material);
+      sm.position.copy(first.position); sm.quaternion.copy(first.quaternion); sm.scale.copy(first.scale);
+      sm.bind(sk.skeleton, sk.bindMatrix);
+      mesh = sm;
+    } else {
+      mesh = new THREE.Mesh(merged, first.material);
+    }
+    mesh.name = first.name;
+    mesh.castShadow = first.castShadow;
+    mesh.receiveShadow = first.receiveShadow;
+    parent.add(mesh);
+    for (const p of parts) p.removeFromParent();
+  }
+}
 
 function get(name: string): Asset {
   const a = assets.get(name);

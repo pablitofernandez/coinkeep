@@ -2,6 +2,11 @@
 
 Lo que cambia en Coinkeep de una versión a otra, contado para jugadores. El juego muestra esta misma lista en la portada (**📜 Novedades**). La versión en inglés está en [CHANGELOG.md](CHANGELOG.md).
 
+## 0.5.1 — 2026-11-11
+
+### Arreglos
+- Mucho más fluido en partidas largas: los enemigos, sobre todo los murciélagos, cuestan mucho menos de dibujar. Hacia la oleada 40 el juego podía ir a tirones.
+
 ## 0.5.0 — 2026-11-11
 
 ### Novedades
