@@ -4,13 +4,13 @@
 // ============================================================
 import { t } from '../i18n';
 import {
-  BASE, BASE_HALF, BASE_HP, CASTLE_HALF, PLAYER_RADIUS, FORGE_MULT, HELPERS, PAD_DEFS, PLAYER, PROP_KINDS, PROP_SOLID,
+  BASE, BASE_HALF, BASE_HP, CASTLE_HALF, DIFFICULTY, PLAYER_RADIUS, FORGE_MULT, HELPERS, PAD_DEFS, PLAYER, PROP_KINDS, PROP_SOLID,
   REPEAT_COST_MULT, REPEAT_COST_MULT_BY,
   TOWER_CASTLE_MARGIN, TOWER_STATS, TOWER_UPGRADE, WAVES, WORLD, enemyStats, ENEMY_KINDS, SHAMAN, pickEnemyKind, waveCount, waveHp,
 } from '../config';
 import type { Building, Difficulty, Drop, Enemy, EnemyKind, GameState, Helper, HelperKind, KillSource, Pad, Prop, SfxName, Solid, Vec } from './types';
 import { emptyStats, logWave } from './stats';
-import { CARDS, CARD_RULES, NO_MODS, computeMods, drawHand, rerollCost, type CardId } from './cards';
+import { CARDS, NO_MODS, computeMods, drawHand, rerollCost, type CardId } from './cards';
 
 let nextId = 1;
 const uid = () => nextId++;
@@ -41,7 +41,7 @@ export function createGame(difficulty: Difficulty = 'normal'): GameState {
       playerDmg: 1, playerSpeed: 1, freeBuild: false, infiniteMoney: false, autoplay: false,
     },
     cheated: false,
-    cardsOn: true, cards: {}, mods: { ...NO_MODS }, offer: null, offeredAt: 0,
+    cardsOn: true, cards: {}, mods: { ...NO_MODS }, offer: null, cardsPending: 0,
   };
   updateUnlocks(G);
   placeProps(G);
@@ -176,7 +176,7 @@ function updateWaves(G: GameState, dt: number) {
     G.waveTimer = WAVES.breakTime;
     text(G, G.player.x, G.player.y, t('float.waveCleared'), '#7f7', 20);
     // reward for clearing the wave: the castle patches itself up a little
-    const heal = Math.min(Math.round(G.base.max * (WAVES.clearHeal + G.mods.clearHeal)), Math.ceil(G.base.max - G.base.hp));
+    const heal = Math.min(Math.round(G.base.max * (DIFFICULTY[G.difficulty].clearHeal + G.mods.clearHeal)), Math.ceil(G.base.max - G.base.hp));
     if (heal > 0) {
       G.base.hp = Math.min(G.base.max, G.base.hp + heal);
       text(G, BASE.x, BASE.y, t('float.castleHeal', { n: heal }), '#7f7', 18);
@@ -184,12 +184,6 @@ function updateWaves(G: GameState, dt: number) {
     sfx(G, 'waveClear');
   }
   if (G.waveTimer <= 0) {
-    // every CARD_RULES.every waves: offer cards; the game stays paused (step() returns) until one is picked
-    if (G.cardsOn && G.wave > 0 && G.wave % CARD_RULES.every === 0 && G.offeredAt !== G.wave) {
-      G.offeredAt = G.wave;
-      const ids = drawHand(G);
-      if (ids.length) { G.offer = { ids, rerolls: 0 }; return; }
-    }
     if (G.wave > 0) { waveEndBonuses(G); logWave(G); }   // summary of the wave that's ending
     G.wave++;
     G.spawnLeft = Math.round(waveCount(G.wave, G.difficulty) * G.mods.enemyCount);
@@ -213,7 +207,7 @@ function updateWaves(G: GameState, dt: number) {
 function waveEndBonuses(G: GameState) {
   const p = G.player, m = G.mods;
   if (m.interest > 0) {
-    const gain = Math.min((G.cards.interest ?? 0) * 30, Math.floor(p.coins * m.interest));
+    const gain = Math.min((G.cards.interest ?? 0) * 50, Math.floor(p.coins * m.interest));
     if (gain > 0) { p.coins += gain; G.stats.earned.bonus += gain; text(G, p.x, p.y, t('float.interest', { n: gain }), '#ffd34d', 18); }
   }
   if (m.cart > 0) {
@@ -237,10 +231,10 @@ export function pickCard(G: GameState, id: CardId) {
   G.mods = computeMods(G);
   const p = G.player;
   // one-off effects
-  if (id === 'reinforcedWalls') { G.base.max += 10; G.base.hp = Math.min(G.base.max, G.base.hp + 10 + Math.round(G.base.max * 0.2)); }
+  if (id === 'reinforcedWalls') { G.base.max += 25; G.base.hp = Math.min(G.base.max, G.base.hp + 25 + Math.round(G.base.max * 0.2)); }
   if (id === 'bloodPact') { G.base.max = Math.max(20, G.base.max - 20); G.base.hp = Math.min(G.base.hp, G.base.max); }
   if (id === 'discount' || id === 'foundations') {
-    const cut = id === 'discount' ? 0.8 : 0.7;
+    const cut = id === 'discount' ? 0.6 : 0.5;
     for (const pad of G.pads) {
       if (!pad.active || pad.done || (id === 'discount' ? pad.small : pad.type !== 'upgrade')) continue;
       pad.cost = Math.max(pad.paid + 1, Math.ceil(pad.cost * cut));
@@ -271,6 +265,7 @@ export function rerollCards(G: GameState): boolean {
 // ------------------------------------------------------------
 export function killEnemy(G: GameState, e: Enemy, byTower: Building | null, source: KillSource) {
   e.dead = true;
+  if (e.boss && G.cardsOn) G.cardsPending++;   // a boss killed earns a card
   G.stats.kills[source]++;
   G.events.push({ type: 'enemyDied', x: e.x, y: e.y, boss: e.boss, kind: e.kind });
   if (byTower) {
@@ -955,6 +950,12 @@ export function step(G: GameState, dt: number, dir: Vec) {
   if (G.offer) {
     if (!G.dev.autoplay) return;   // waiting for the player to choose a card
     pickCard(G, G.offer.ids[Math.floor(Math.random() * G.offer.ids.length)]);
+  }
+  // a boss was killed: offer cards; the game stays paused (step() returns) until one is picked
+  if (G.cardsPending > 0) {
+    G.cardsPending--;
+    const ids = drawHand(G);
+    if (ids.length) { G.offer = { ids, rerolls: 0 }; return; }
   }
   G.t += dt;
   if (G.dev.infiniteMoney) G.player.coins = Math.max(G.player.coins, 99999);

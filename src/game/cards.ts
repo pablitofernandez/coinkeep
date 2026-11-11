@@ -1,6 +1,7 @@
 // ============================================================
-//  Cards: every CARDS.every waves the game pauses and offers 3 cards; the player
-//  keeps one. Coins in hand can pay for a new hand ("reroll"), dearer each time.
+//  Cards: a reward for killing a boss. The game pauses and offers 3 cards (at
+//  least one rare or better); the player keeps one. Few cards per game, so each
+//  one is strong. Coins in hand can pay for a new hand ("reroll"), dearer each time.
 //
 //  Pure module (no DOM, no Three.js). The effects are read by the simulation
 //  through `G.mods` (recomputed with `computeMods` whenever a card is taken);
@@ -39,37 +40,37 @@ const hasCannon = (G: GameState) => G.buildings.some(b => b.type === 'cannon') |
 const hasWolves = (G: GameState) => G.helperLevels.dog > 0;
 
 export const CARDS: Record<CardId, CardDef> = {
-  sharpArrows:     { icon: '🏹', rarity: 'common', max: 5 },
-  tautString:      { icon: '🎯', rarity: 'common', max: 4 },
-  blackPowder:     { icon: '💥', rarity: 'common', max: 3, when: hasCannon },
+  sharpArrows:     { icon: '🏹', rarity: 'common', max: 3 },
+  tautString:      { icon: '🎯', rarity: 'common', max: 3 },
+  blackPowder:     { icon: '💥', rarity: 'common', max: 2, when: hasCannon },
   siegeShot:       { icon: '💣', rarity: 'rare',   max: 2, when: hasCannon },
   hawkEye:         { icon: '🦅', rarity: 'rare',   max: 2 },
   arrowRain:       { icon: '🌧️', rarity: 'epic',   max: 1, when: G => G.buildings.some(b => b.type === 'archer') },
-  foundations:     { icon: '🧱', rarity: 'common', max: 3, when: G => G.pads.some(p => p.active && p.type === 'upgrade') },
+  foundations:     { icon: '🧱', rarity: 'common', max: 2, when: G => G.pads.some(p => p.active && p.type === 'upgrade') },
 
-  temperedBlade:   { icon: '🗡️', rarity: 'common', max: 5 },
-  lightBoots:      { icon: '👢', rarity: 'common', max: 3 },
-  magnet:          { icon: '🧲', rarity: 'common', max: 3 },
-  piercingBolt:    { icon: '➶',  rarity: 'rare',   max: 3 },
+  temperedBlade:   { icon: '🗡️', rarity: 'common', max: 3 },
+  lightBoots:      { icon: '👢', rarity: 'common', max: 2 },
+  magnet:          { icon: '🧲', rarity: 'common', max: 2 },
+  piercingBolt:    { icon: '➶',  rarity: 'rare',   max: 2 },
   whirlwind:       { icon: '🌀', rarity: 'epic',   max: 1 },
 
-  reinforcedWalls: { icon: '🛡️', rarity: 'common', max: 3 },
+  reinforcedWalls: { icon: '🛡️', rarity: 'common', max: 2 },
   mortar:          { icon: '🪣', rarity: 'rare',   max: 2 },
-  boilingOil:      { icon: '🔥', rarity: 'rare',   max: 3 },
+  boilingOil:      { icon: '🔥', rarity: 'rare',   max: 2 },
   moat:            { icon: '🌊', rarity: 'rare',   max: 2 },
 
-  discount:        { icon: '🏷️', rarity: 'common', max: 3, when: G => G.pads.some(p => p.active && !p.done && !p.small) },
-  tithe:           { icon: '🪙', rarity: 'rare',   max: 3 },
+  discount:        { icon: '🏷️', rarity: 'common', max: 2, when: G => G.pads.some(p => p.active && !p.done && !p.small) },
+  tithe:           { icon: '🪙', rarity: 'rare',   max: 2 },
   interest:        { icon: '🏦', rarity: 'rare',   max: 2 },
-  cart:            { icon: '🛒', rarity: 'rare',   max: 3, when: G => G.buildings.length > 0 },
+  cart:            { icon: '🛒', rarity: 'rare',   max: 2, when: G => G.buildings.length > 0 },
 
-  pack:            { icon: '🐺', rarity: 'rare',   max: 3, when: hasWolves },
-  apprentice:      { icon: '🧑‍🌾', rarity: 'rare',  max: 3 },
+  pack:            { icon: '🐺', rarity: 'rare',   max: 2, when: hasWolves },
+  apprentice:      { icon: '🧑‍🌾', rarity: 'epic',  max: 2 },
   bossBone:        { icon: '🦴', rarity: 'common', max: 2, when: hasWolves },
 
-  batHunter:       { icon: '🦇', rarity: 'common', max: 3, when: G => G.wave >= 5 },
-  silence:         { icon: '🤫', rarity: 'common', max: 2, when: G => G.wave >= 7 },
-  giantSlayer:     { icon: '⚔️', rarity: 'rare',   max: 3 },
+  batHunter:       { icon: '🦇', rarity: 'common', max: 2 },
+  silence:         { icon: '🤫', rarity: 'common', max: 2 },
+  giantSlayer:     { icon: '⚔️', rarity: 'rare',   max: 2 },
 
   bloodPact:       { icon: '🩸', rarity: 'epic',   max: 2, when: G => G.base.max > 40 },
   goldFever:       { icon: '💰', rarity: 'epic',   max: 2 },
@@ -78,11 +79,10 @@ export const CARDS: Record<CardId, CardDef> = {
 export const CARD_IDS = Object.keys(CARDS) as CardId[];
 
 /** How rarities are drawn (weights). */
-export const RARITY_WEIGHT: Record<Rarity, number> = { common: 70, rare: 25, epic: 5 };
+export const RARITY_WEIGHT: Record<Rarity, number> = { common: 55, rare: 35, epic: 10 };
 
-/** Card offers: how often, how many, and what a new hand costs. */
+/** Card offers (one per boss killed): how many cards, and what a new hand costs. */
 export const CARD_RULES = {
-  every: 2,                    // after every 2nd wave
   hand: 3,
   rerollBase: 5,               // first reroll: rerollBase + wave
   rerollMult: 1.5,             // each extra reroll in the same offer costs ×1.5
@@ -111,29 +111,29 @@ export const NO_MODS: CardMods = {
 export function computeMods(G: GameState): CardMods {
   const n = (id: CardId) => G.cards[id] ?? 0;
   return {
-    archerDmg: 1 + 0.08 * n('sharpArrows'),
-    archerRate: 1 + 0.08 * n('tautString'),            // shots per second ×
-    cannonSplash: 1 + 0.25 * n('blackPowder'),
-    cannonBoss: 1 + 0.5 * n('siegeShot'),               // ×1.5, ×2
-    towerRange: 1 + 0.1 * n('hawkEye'),
+    archerDmg: 1 + 0.2 * n('sharpArrows'),
+    archerRate: 1 + 0.2 * n('tautString'),             // shots per second ×
+    cannonSplash: 1 + 0.5 * n('blackPowder'),
+    cannonBoss: 1 + n('siegeShot'),                     // ×2, ×3
+    towerRange: 1 + 0.2 * n('hawkEye'),
     arrowRain: n('arrowRain'),
-    swordDmg: 1 + 0.12 * n('temperedBlade'),
-    moveSpeed: 1 + 0.1 * n('lightBoots'),
-    magnet: 1 + 0.5 * n('magnet'),
-    pierce: n('piercingBolt'),
+    swordDmg: 1 + 0.3 * n('temperedBlade'),
+    moveSpeed: 1 + 0.2 * n('lightBoots'),
+    magnet: 1 + n('magnet'),
+    pierce: 2 * n('piercingBolt'),                      // extra enemies each bolt hits
     whirlwind: n('whirlwind'),
-    clearHeal: 0.08 * n('mortar'),                      // added to WAVES.clearHeal
-    oil: 0.1 * n('boilingOil'),                         // burn per second, as a fraction of a warrior's health
-    moatSlow: Math.pow(0.85, n('moat')),
-    loot: (1 + 0.05 * n('tithe')) * (1 + 0.25 * n('goldFever')),
-    interest: 0.03 * n('interest'),
-    cart: Math.min(1, 0.15 * n('cart')),
-    wolfDmg: 1 + 0.3 * n('pack'),
-    wolfBoss: 1 + n('bossBone'),                        // ×2, ×3
-    flyDmg: 1 + 0.3 * n('batHunter'),
-    mageHeal: Math.pow(0.5, n('silence')),
-    bossDmg: 1 + 0.25 * n('giantSlayer'),
-    allDmg: 1 + 0.2 * n('bloodPact'),
+    clearHeal: 0.15 * n('mortar'),                      // added to the difficulty's clearHeal
+    oil: 0.2 * n('boilingOil'),                         // burn per second, as a fraction of a warrior's health
+    moatSlow: Math.pow(0.7, n('moat')),
+    loot: (1 + 0.1 * n('tithe')) * (1 + 0.25 * n('goldFever')),
+    interest: 0.05 * n('interest'),
+    cart: Math.min(1, 0.3 * n('cart')),
+    wolfDmg: 1 + 0.6 * n('pack'),
+    wolfBoss: 1 + 2 * n('bossBone'),                    // ×3, ×5
+    flyDmg: 1 + 0.6 * n('batHunter'),
+    mageHeal: Math.pow(0.4, n('silence')),
+    bossDmg: 1 + 0.5 * n('giantSlayer'),
+    allDmg: 1 + 0.35 * n('bloodPact'),
     enemyCount: 1 + 0.25 * n('goldFever'),
   };
 }
@@ -143,15 +143,14 @@ function pool(G: GameState): CardId[] {
   return CARD_IDS.filter(id => (G.cards[id] ?? 0) < CARDS[id].max && (CARDS[id].when?.(G) ?? true));
 }
 
-/** Draw a hand. After a boss wave, at least one card is rare or better. `avoid`: cards just shown (a reroll shows new ones if it can). */
+/** Draw a hand: at least one card is rare or better. `avoid`: cards just shown (a reroll shows new ones if it can). */
 export function drawHand(G: GameState, avoid: CardId[] = []): CardId[] {
   let left = pool(G);
   const fresh = left.filter(id => !avoid.includes(id));
   if (fresh.length >= CARD_RULES.hand) left = fresh;
   const hand: CardId[] = [];
-  const afterBoss = G.wave > 0 && G.wave % 5 === 0;
   while (hand.length < CARD_RULES.hand && left.length) {
-    const needRare = afterBoss && hand.length === CARD_RULES.hand - 1 && hand.every(id => CARDS[id].rarity === 'common');
+    const needRare = hand.length === CARD_RULES.hand - 1 && hand.every(id => CARDS[id].rarity === 'common');
     const options = needRare && left.some(id => CARDS[id].rarity !== 'common') ? left.filter(id => CARDS[id].rarity !== 'common') : left;
     const total = options.reduce((a, id) => a + RARITY_WEIGHT[CARDS[id].rarity], 0);
     let r = Math.random() * total;

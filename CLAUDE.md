@@ -175,10 +175,10 @@ Notes:
 
 ---
 
-## Cards (v0.5.0)
+## Cards (v0.5.0; boss reward since v0.6.0)
 
-- After every `CARD_RULES.every` (2) waves, when the wave timer runs out, `updateWaves` sets `G.offer` (3 cards from `drawHand`) and `step()` does nothing until `pickCard(G, id)` (sim.ts) is called. The autopilot (`G.dev.autoplay`) picks one at random. `G.cardsOn` is false on the title screen's showcase.
-- Rarity weights common 70 / rare 25 / epic 5 (`RARITY_WEIGHT`). After a boss wave at least one card is rare or better. Each card has a `max` stack and an optional `when` (e.g. cannon cards only with a cannon, wolf cards only with wolves).
+- **Cards are a boss reward** (v0.6.0, after a friend's feedback: every 2 waves was annoying and too easy). `killEnemy` bumps `G.cardsPending` when a boss dies; at the start of the next `step()` it sets `G.offer` (3 cards from `drawHand`) and `step()` does nothing until `pickCard(G, id)` (sim.ts) is called. So ~1 card per 5 waves, each about twice as strong as the v0.5 values, with lower `max` stacks. The autopilot (`G.dev.autoplay`) picks one at random. `G.cardsOn` is false on the title screen's showcase.
+- Rarity weights common 55 / rare 35 / epic 10 (`RARITY_WEIGHT`). Every hand has at least one rare or better. Apprentice (free peon) is epic: the peon is the most profitable thing in the game. Each card has a `max` stack and an optional `when` (e.g. cannon cards only with a cannon, wolf cards only with wolves).
 - Effects: continuous ones are numbers in `G.mods` (`computeMods`), read by the simulation (`cardDamage` applies the per-source/per-target damage multipliers in `damageEnemy`; tower range/rate/splash in `towerStats`; loot in `spawnEnemy`; interest and cart in `waveEndBonuses`). One-off effects (Reinforced walls, Blood pact, Discount, Foundations, Apprentice) are in `pickCard`.
 - Reroll («🎲 Otra mano / New hand»): pays `(5 + wave) × 1.5^rerolls` from the coins in hand (`rerollCards`), counted in `stats.spent.reroll`. Interest goes to `stats.earned.bonus`; Boiling oil kills to `stats.kills.castle`.
 - UI: `#cards` overlay in index.html, built by `updateCards()` in main.ts (keys 1/2/3 and R). Held cards show as icons in `#hud-cards`. Texts: `card.<id>.name` / `card.<id>.desc`, `rarity.<r>`, `cards.*` in i18n.ts.
@@ -200,9 +200,12 @@ In the code the warrior is still called `zombie` and the minion `runner`.
 Chosen on the title screen (Normal / Hard / Nightmare) and saved in `localStorage` (`sg-diff`). It lives in `DIFFICULTY` (`config.ts`); the player-visible names come from the i18n keys `diff.<difficulty>` (likewise pad labels use `pad.<type>` and helper names `helper.<kind>`, not text in `config.ts`):
 - `grow`, `mid` and `late`: how much health grows per wave (up to 15, up to 30 and beyond).
 - `count`: enemy count multiplier per wave.
+- `clearHeal`: castle heal for wiping out a wave (v0.6.0: 12 % / 8 % / 4 %). With 12 % everywhere, a Nightmare player with cards didn't need to repair until wave 25.
 - `loot`: loot multiplier. Loot comes from a fixed curve (`lootHp`), not from health. **Money is what decides difficulty the most**: with more loot, towers and the forge grow faster than enemies and the game breaks (there is a "cliff": small changes go from losing at wave 30 to never losing).
 - Autopilot (collects better than a person), 8 runs each, after v0.4.1: Nightmare median wave 23, Hard 33, Normal bimodal (38–41 or 66–75: the economy "cliff"). Before v0.4.1: 20 / 31 / 40.
 - v0.5.0 (cards, autopilot picking at random, `late` +0.06: 1.22 / 1.23 / 1.25), 6 runs each: Nightmare ~32 (25–52), Hard ~37 (1 of 6 escaped to 68), Normal ~66 (41–70). Without the `late` change Hard never lost in 4 of 6 runs.
+- v0.6.0 (cards only on boss kills, stronger; `clearHeal` by difficulty), 6 runs each: Nightmare 29 (26–34), Hard ~34 (31–38, 1 of 6 escaped to 74), Normal ~55 (38–67).
+- Humans with v0.5 cards (2026-11-11): one Nightmare player went from a median of 15 (9 games) to 29, another from 15 to 20. Part of it was the v0.4.1 clear heal, released at the same time.
 - **Real players lose much earlier than the autopilot**: in the published version (v0.3–0.4.0, 27 games, 3 players) the medians were Normal 20, Hard 15, Nightmare 15. Target for humans: Normal ~30, Hard ~20, Nightmare ~15.
 - Benchmark from the console: import `sim.ts`, `cheats.ts` (exact URLs, see below), then loop `createGame(diff)` with `G.dev.autoplay = true` and `step(G, 1/60, autopilotDir(G))` until `G.over`, clearing `G.events` each step. Headless games don't send logs. With the browser pane hidden, yield with `setTimeout` and poll a `window.__result` instead of awaiting for more than ~40 s.
 - **To simulate from the console**, import the modules with the exact URL the page uses (`performance.getEntriesByType('resource')`, with its `?t=`). Importing plain `/src/config.ts` gives **another copy** of the module and the changes don't reach the simulation.

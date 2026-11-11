@@ -39,7 +39,6 @@ export const WAVES = {
   breakTime: 8,           // pause after wiping out a whole wave
   bossEvery: 5,
   bossHp: 6,              // boss health = this × the wave's warrior
-  clearHeal: 0.12,        // wiping out a whole wave heals the castle by this fraction of its max health
   count: (wave: number) => 4 + wave * 2,
   spawnWindow: 13,        // seconds over which the wave is spread
 };
@@ -82,10 +81,11 @@ export function pickEnemyKind(wave: number): EnemyKind {
  * Careful: money is what decides difficulty the most (with more loot, towers grow faster than enemies).
  * `count` multiplies the enemies per wave.
  */
-export const DIFFICULTY: Record<Difficulty, { grow: number; mid: number; late: number; count: number; loot: number }> = {
-  normal:    { grow: 1.21, mid: 1.2,  late: 1.22, count: 1.4,  loot: 0.9 },
-  hard:      { grow: 1.22, mid: 1.21, late: 1.23, count: 1.45, loot: 0.85 },
-  nightmare: { grow: 1.24, mid: 1.23, late: 1.25, count: 1.6,  loot: 0.8 },
+// clearHeal: wiping out a whole wave heals the castle by this fraction of its max health
+export const DIFFICULTY: Record<Difficulty, { grow: number; mid: number; late: number; count: number; loot: number; clearHeal: number }> = {
+  normal:    { grow: 1.21, mid: 1.2,  late: 1.22, count: 1.4,  loot: 0.9,  clearHeal: 0.12 },
+  hard:      { grow: 1.22, mid: 1.21, late: 1.23, count: 1.45, loot: 0.85, clearHeal: 0.08 },
+  nightmare: { grow: 1.24, mid: 1.23, late: 1.25, count: 1.6,  loot: 0.8,  clearHeal: 0.04 },
 };
 export const DIFFICULTIES = Object.keys(DIFFICULTY) as Difficulty[];
 

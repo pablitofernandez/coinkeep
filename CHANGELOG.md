@@ -2,6 +2,16 @@
 
 What changes in Coinkeep from one version to the next, written for players. The game shows this same list on the title screen (**📜 What's new**). The Spanish version is in [CHANGELOG.es.md](CHANGELOG.es.md).
 
+## 0.6.0 — 2026-11-11
+
+### New
+- **Cards are now a boss reward:** you get a hand of 3 only when you kill a boss (every 5 waves), not every 2 waves. Fewer cards, but much stronger ones, and every hand has at least one rare or better.
+
+### Balance
+- Every card is about twice as strong as before (for example, Sharp arrows +20% damage instead of +8%), and most can be taken fewer times.
+- **Apprentice** (free peon) is now epic.
+- Clearing a whole wave heals the castle less on harder difficulties: 12% on Normal, 8% on Hard and 4% on Nightmare.
+
 ## 0.5.2 — 2026-11-11
 
 ### Fixes

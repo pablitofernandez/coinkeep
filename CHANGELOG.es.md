@@ -2,6 +2,16 @@
 
 Lo que cambia en Coinkeep de una versión a otra, contado para jugadores. El juego muestra esta misma lista en la portada (**📜 Novedades**). La versión en inglés está en [CHANGELOG.md](CHANGELOG.md).
 
+## 0.6.0 — 2026-11-11
+
+### Novedades
+- **Las cartas son ahora la recompensa por matar a un jefe:** te ofrecen 3 solo cuando derrotas a un jefe (cada 5 oleadas), en vez de cada 2 oleadas. Menos cartas, pero mucho más fuertes, y en cada mano hay al menos una rara o mejor.
+
+### Equilibrio
+- Todas las cartas son más o menos el doble de fuertes que antes (por ejemplo, Flechas afiladas da +20 % de daño en vez de +8 %), y la mayoría se pueden coger menos veces.
+- **Aprendiz** (peón gratis) pasa a ser épica.
+- Limpiar una oleada entera cura menos el castillo en las dificultades altas: 12 % en Normal, 8 % en Difícil y 4 % en Pesadilla.
+
 ## 0.5.2 — 2026-11-11
 
 ### Arreglos

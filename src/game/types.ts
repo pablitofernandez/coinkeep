@@ -155,7 +155,7 @@ export interface GameState {
   cards: Partial<Record<CardId, number>>;   // cards taken (how many of each)
   mods: CardMods;            // what those cards change (recomputed when one is taken)
   offer: CardOffer | null;   // cards on the table: the simulation is paused until one is picked
-  offeredAt: number;         // last wave an offer was made after
+  cardsPending: number;      // bosses killed whose card offer hasn't been shown yet
 }
 
 /** Hand of cards to choose from. */
