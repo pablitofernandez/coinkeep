@@ -1,27 +1,27 @@
-// Coordenadas de juego: (x, y) sobre el suelo en tiles. El render las mapea a (x, 0, y) en 3D.
+// Game coordinates: (x, y) on the ground in tiles. The renderer maps them to (x, 0, y) in 3D.
 export interface Vec { x: number; y: number }
 
 export type PadType = 'archer' | 'cannon' | 'power' | 'repair' | 'forge' | 'kennel' | 'peon' | 'upgrade';
 
-// Ayudantes automáticos:
-//  - perro: recoge las monedas del suelo
-//  - peón: vacía las mesas de botín de las torres
+// Automatic helpers:
+//  - dog: picks up coins from the ground
+//  - peon: empties the towers' loot tables
 export type HelperKind = 'dog' | 'peon';
 export interface Helper extends Vec {
   id: number;
   kind: HelperKind;
   level: number;
-  carry: number;                     // monedas que lleva encima
+  carry: number;                     // coins it is carrying
   mode: 'fetch' | 'deliver' | 'idle' | 'attack';
   moving: boolean;
   faceX: number; faceY: number;
-  home: Vec;                         // caseta / cabaña
-  acc: number;                       // acumulador para el ritmo de recogida en mesas
-  targetId: number;                  // moneda / mesa / enemigo al que va (-1 = ninguno)
+  home: Vec;                         // kennel / hut
+  acc: number;                       // accumulator for the pickup rate at tables
+  targetId: number;                  // coin / table / enemy it is heading to (-1 = none)
   atkCd: number;
-  attackT: number;                   // >0 durante la animación de mordisco
-  slot: number;                      // índice dentro de su grupo (para repartirse al esperar)
-  goal?: Vec | null;                 // siguiente punto al que camina (solo para dibujarlo en el menú de desarrollo)
+  attackT: number;                   // >0 during the bite animation
+  slot: number;                      // index within its group (to spread out while waiting)
+  goal?: Vec | null;                 // next point it walks to (only for drawing it in the dev menu)
 }
 export type TowerType = 'archer' | 'cannon';
 
@@ -32,23 +32,23 @@ export interface Player extends Vec {
   speed: number;
   cd: number;
   moving: boolean;
-  faceX: number; faceY: number;   // última dirección de movimiento
-  weapon: Weapon;                 // última arma usada (para la animación)
-  attackT: number;                // >0 durante la animación de ataque
+  faceX: number; faceY: number;   // last movement direction
+  weapon: Weapon;                 // last weapon used (for the animation)
+  attackT: number;                // >0 during the attack animation
   target: Vec | null;
 }
 
 export type Weapon = 'sword' | 'bow';
 
-/** Tipos de enemigo: zombi (normal), esqueleto (corredor), murciélago (vuela) y mago (cura a los demás). */
+/** Enemy types: zombie (normal), skeleton (runner), bat (flies) and mage (heals the others). */
 export type EnemyKind = 'zombie' | 'runner' | 'bat' | 'shaman';
 
 export interface Enemy extends Vec {
   id: number;
   kind: EnemyKind;
-  fly: number;                 // altura de vuelo (0 = por el suelo)
-  cast: number;                // mago: segundos hasta su próximo hechizo de curación
-  healed: number;              // destello verde al ser curado
+  fly: number;                 // flight height (0 = on the ground)
+  cast: number;                // mage: seconds until its next healing spell
+  healed: number;              // green flash when healed
   hp: number; maxHp: number;
   speed: number; value: number;
   dmg: number; atkRate: number; atk: number;
@@ -69,19 +69,19 @@ export interface Pad extends Vec {
   cost: number; paid: number; unlock: number;
   repeat: boolean; active: boolean; done: boolean;
   level: number; cool: number;
-  buildingId: number | null;   // solo en parcelas 'upgrade': la torre que mejora
-  small: boolean;              // parcela pequeña (mejoras de torre)
+  buildingId: number | null;   // only on 'upgrade' pads: the tower it upgrades
+  small: boolean;              // small pad (tower upgrades)
 }
 
 export interface Building extends Vec {
   id: number;
   type: TowerType;
-  tx: number; ty: number;   // posición de la mesa de botín
+  tx: number; ty: number;   // position of the loot table
   cd: number; table: number;
   aimX: number; aimY: number;
   level: number;
-  baseCost: number;          // lo que costó construirla (para calcular el precio de las mejoras)
-  startLevel: number;        // nivel con el que se construyó (las torres caras nacen mejoradas)
+  baseCost: number;          // what it cost to build (to work out the upgrade price)
+  startLevel: number;        // level it was built at (expensive towers start upgraded)
 }
 
 export interface Shot extends Vec {
@@ -89,19 +89,19 @@ export interface Shot extends Vec {
   type: TowerType;
   z: number; z0: number; dist0: number;
   target: Enemy | null;
-  tx: number; ty: number; tz: number;   // punto de impacto (tz: altura, más alta si el objetivo vuela)
+  tx: number; ty: number; tz: number;   // impact point (tz: height, higher if the target flies)
   speed: number; dmg: number; splash: number;
-  from: Building | null;           // null = flecha del jugador (el botín cae al suelo)
+  from: Building | null;           // null = player's arrow (the loot drops on the ground)
   done: boolean;
 }
 
 export interface Point3 { x: number; y: number; z: number }
 
-/** Elemento de decorado colocado por la simulación (la vista lo dibuja con ese modelo, giro y escala). */
+/** Scenery item placed by the simulation (the view draws it with that model, rotation and scale). */
 export interface Prop extends Vec { model: string; rot: number; scale: number }
 /**
- * Zona sólida (tronco de árbol, roca, tronco caído…): nadie la puede atravesar.
- * Es un círculo de radio r, o una cápsula si tiene (hx, hy): el segmento centro ± (hx, hy) engordado r.
+ * Solid area (tree trunk, rock, fallen log…): nobody can pass through it.
+ * It's a circle of radius r, or a capsule if it has (hx, hy): the segment centre ± (hx, hy) thickened by r.
  */
 export interface Solid extends Vec { r: number; hx?: number; hy?: number }
 
@@ -134,73 +134,73 @@ export interface GameState {
   shots: Shot[];
   buildings: Building[];
   pads: Pad[];
-  props: Prop[];             // árboles, rocas, tocones y troncos del claro (cambian en cada partida)
-  solids: Solid[];           // sus zonas sólidas
+  props: Prop[];             // trees, rocks, stumps and logs in the clearing (change every game)
+  solids: Solid[];           // their solid areas
   wave: number; waveTimer: number; spawnLeft: number; spawnTimer: number;
   towerMult: number;
   transferAcc: number;
   helpers: Helper[];
-  padDwellId: number;        // parcela que está pisando el jugador
-  padDwell: number;          // cuánto tiempo lleva encima
-  castleLevel: number;       // 1..5, sube con "Reparar base" (cambia el aspecto del castillo)
-  helperLevels: Record<HelperKind, number>;  // nivel de la caseta / cabaña (0 = no construida)
-  stats: Stats;              // registro de la partida (para equilibrar)
+  padDwellId: number;        // pad the player is standing on
+  padDwell: number;          // how long they've been on it
+  castleLevel: number;       // 1..5, goes up with "Repair base" (changes the castle's look)
+  helperLevels: Record<HelperKind, number>;  // kennel / hut level (0 = not built)
+  stats: Stats;              // game log (for balancing)
   events: GameEvent[];
-  dev: DevFlags;             // trucos activos del menú de desarrollo
-  cheated: boolean;          // se ha usado el menú de desarrollo en esta partida (se marca en el registro)
+  dev: DevFlags;             // active dev menu cheats
+  cheated: boolean;          // the dev menu was used this game (flagged in the log)
 }
 
-/** Trucos que cambian el comportamiento de la simulación (menú de desarrollo). */
+/** Cheats that change how the simulation behaves (dev menu). */
 export interface DevFlags {
-  pauseWaves: boolean;       // el contador hasta la siguiente oleada no avanza
-  godCastle: boolean;        // el castillo no pierde vida
-  freeze: boolean;           // enemigos quietos y sin atacar
-  enemyHp: number;           // multiplicador de vida de los enemigos nuevos
-  enemySpeed: number;        // multiplicador de velocidad de los enemigos
-  playerDmg: number;         // multiplicador de daño del jugador
-  playerSpeed: number;       // multiplicador de velocidad del jugador
-  freeBuild: boolean;        // pisar una parcela la completa gratis
-  infiniteMoney: boolean;    // siempre 99.999 monedas
-  autoplay: boolean;         // recoge todo el dinero solo y compra la parcela más barata que pueda
+  pauseWaves: boolean;       // the countdown to the next wave doesn't advance
+  godCastle: boolean;        // the castle doesn't lose health
+  freeze: boolean;           // enemies stand still and don't attack
+  enemyHp: number;           // health multiplier for new enemies
+  enemySpeed: number;        // enemy speed multiplier
+  playerDmg: number;         // player damage multiplier
+  playerSpeed: number;       // player speed multiplier
+  freeBuild: boolean;        // stepping on a pad completes it for free
+  infiniteMoney: boolean;    // always 99,999 coins
+  autoplay: boolean;         // picks up all the money by itself and buys the cheapest pad it can
 }
 
 // ------------------------------------------------------------
-//  Registro de partida
+//  Game log
 // ------------------------------------------------------------
 export type KillSource = 'sword' | 'bow' | 'archer' | 'cannon' | 'dog';
 export type EarnSource = 'ground' | 'table' | 'dog' | 'peon';
 
-/** Contadores acumulados desde el inicio de la partida. */
+/** Counters accumulated since the start of the game. */
 export interface Counters {
-  earned: Record<EarnSource, number>;     // monedas que llegan a la pila del jugador, por origen
-  spent: Partial<Record<PadType, number>>;// monedas gastadas, por tipo de parcela
+  earned: Record<EarnSource, number>;     // coins that reach the player's stack, by source
+  spent: Partial<Record<PadType, number>>;// coins spent, by pad type
   kills: Record<KillSource, number>;
   baseDamage: number;
   spawned: number;
   spawnedKind: Partial<Record<EnemyKind | 'boss', number>>;
 }
 
-/** Foto de una oleada (los valores de contadores son lo ocurrido SOLO en esa oleada). */
+/** Snapshot of a wave (counter values are what happened ONLY in that wave). */
 export interface WaveLog extends Counters {
   wave: number;
-  t: number;                 // segundo de partida en que termina
+  t: number;                 // game second at which it ends
   duration: number;
   baseHp: number; baseMax: number;
-  coinsHeld: number;         // monedas en la pila al terminar
-  tablesLoot: number;        // monedas esperando en mesas
-  groundCoins: number;       // monedas en el suelo
+  coinsHeld: number;         // coins in the stack at the end
+  tablesLoot: number;        // coins waiting on tables
+  groundCoins: number;       // coins on the ground
   enemiesAlive: number;
-  enemyHp: number;           // vida de un enemigo normal en esa oleada
-  enemyValue: number;        // monedas que suelta
-  towers: string;            // p.ej. "A5 A3 C2" (tipo + nivel)
+  enemyHp: number;           // health of a normal enemy in that wave
+  enemyValue: number;        // coins it drops
+  towers: string;            // e.g. "A5 A3 C2" (type + level)
   towerMult: number;
   helpers: Record<HelperKind, number>;
   player: { sword: number; bow: number };
-  pads: string;              // niveles de las parcelas repetibles
+  pads: string;              // levels of the repeatable pads
 }
 
 export interface Stats extends Counters {
   waves: WaveLog[];
-  last: Counters;            // contadores al empezar la oleada actual (para calcular la diferencia)
+  last: Counters;            // counters at the start of the current wave (to compute the difference)
   lastT: number;
 }

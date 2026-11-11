@@ -1,8 +1,8 @@
 // ============================================================
-//  Envío del registro de partida al servidor de desarrollo.
-//  Solo funciona con `npm run dev` (en la versión final no hace nada).
-//  Si el servidor no responde, el registro se guarda en localStorage
-//  y se reenvía en cuanto vuelva a haber conexión.
+//  Sends the game log to the development server.
+//  Only works with `npm run dev` (does nothing in the final build).
+//  If the server doesn't respond, the log is stored in localStorage
+//  and resent as soon as there's a connection again.
 // ============================================================
 import type { GameState } from './game/types';
 
@@ -19,7 +19,7 @@ function writePending(p: Record<string, Payload>) {
   try {
     if (Object.keys(p).length) localStorage.setItem(PENDING_KEY, JSON.stringify(p));
     else localStorage.removeItem(PENDING_KEY);
-  } catch { /* sin almacenamiento */ }
+  } catch { /* no storage */ }
 }
 
 export class DevLog {
@@ -27,12 +27,12 @@ export class DevLog {
   private startedAt = '';
   private sentWaves = -1;
   private sentOver = false;
-  /** Resultado del último envío (para el menú de desarrollo). */
+  /** Result of the last send (for the developer menu). */
   status = '';
 
   constructor() { if (ENABLED) this.flushPending(); }
 
-  /** Empieza una sesión nueva (cada partida es un archivo distinto). */
+  /** Start a new session (each game is a separate file). */
   start() {
     const d = new Date();
     this.startedAt = d.toISOString();
@@ -42,7 +42,7 @@ export class DevLog {
     if (ENABLED) this.flushPending();
   }
 
-  /** Llamar cada frame: envía el registro cuando termina una oleada o la partida. */
+  /** Call every frame: sends the log when a wave or the game ends. */
   update(G: GameState) {
     if (!ENABLED) return;
     const n = G.stats.waves.length;
@@ -53,13 +53,13 @@ export class DevLog {
     this.send(this.payload(G));
   }
 
-  /** Envía el registro ahora mismo, aunque no haya terminado la oleada. */
+  /** Send the log right now, even if the wave hasn't finished. */
   sendNow(G: GameState) {
     if (!ENABLED) return;
     this.send(this.payload(G));
   }
 
-  /** Registros que no se pudieron enviar y esperan en el navegador. */
+  /** Logs that couldn't be sent and are waiting in the browser. */
   pendingCount() { return Object.keys(readPending()).length; }
 
   private payload(G: GameState): Payload {
@@ -67,7 +67,7 @@ export class DevLog {
       session: this.session,
       startedAt: this.startedAt,
       updatedAt: new Date().toISOString(),
-      // true si se usó el menú de desarrollo: estos datos no sirven para equilibrar
+      // true if the developer menu was used: this data is no good for balancing
       cheats: G.cheated,
       device: {
         mobile: window.matchMedia('(pointer: coarse)').matches,
@@ -95,17 +95,17 @@ export class DevLog {
 
   private send(p: Payload) {
     this.post(p).then(() => {
-      // al enviarse, ya no hace falta la copia guardada de esta partida; y se aprovecha para mandar las atrasadas
+      // once sent, the stored copy of this game is no longer needed; also a chance to send any backlog
       const pend = readPending();
       if (pend[p.session]) { delete pend[p.session]; writePending(pend); }
-      this.status = 'Enviado ' + new Date().toLocaleTimeString();
+      this.status = 'Sent ' + new Date().toLocaleTimeString();
       this.flushPending();
     }).catch(() => {
-      // sin servidor: se guarda (la última versión de cada partida) para reenviarla después
+      // no server: store it (the latest version of each game) to resend later
       const pend = readPending();
       pend[p.session] = p;
       writePending(pend);
-      this.status = 'Sin servidor: guardado en el navegador';
+      this.status = 'No server: saved in the browser';
     });
   }
 

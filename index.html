@@ -1,13 +1,13 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Coinkeep</title>
-<meta name="description" content="Tower defense isométrico para el navegador: defiende el castillo y guarda cada moneda.">
-<!-- vista previa al compartir el enlace -->
+<meta name="description" content="Isometric tower defense for the browser: defend the castle and keep every coin.">
+<!-- link preview when sharing (crawlers do not run JS, so this stays in English) -->
 <meta property="og:title" content="Coinkeep">
-<meta property="og:description" content="Tower defense isométrico para el navegador: defiende el castillo y guarda cada moneda.">
+<meta property="og:description" content="Isometric tower defense for the browser: defend the castle and keep every coin.">
 <meta property="og:image" content="https://pablitofernandez.github.io/coinkeep/title.jpg">
 <meta property="og:url" content="https://pablitofernandez.github.io/coinkeep/">
 <meta name="twitter:card" content="summary_large_image">
@@ -17,40 +17,48 @@
 <div id="app"></div>
 <div id="hud">
   <div class="hud-left"><span class="coin-icon"></span><span id="hud-coins">0</span></div>
-  <div class="hud-center"><div id="hud-wave">Oleada 0</div><div id="hud-sub"></div></div>
+  <div class="hud-center"><div id="hud-wave"></div><div id="hud-sub"></div></div>
   <div class="hud-right"><div id="hud-hp-text">60/60</div><div class="hp-bar"><div id="hud-hp"></div></div></div>
-  <div id="loading">Cargando…</div>
-  <button id="mute" class="hud-btn" aria-label="Silenciar sonido (M)" title="Sonido (M)">🔊</button>
-  <button id="music" class="hud-btn" aria-label="Música (N)" title="Música (N)">🎵</button>
+  <div id="loading" data-i18n="loading">Loading…</div>
+  <button id="mute" class="hud-btn" data-i18n-attr="aria-label:hud.mute;title:hud.sound">🔊</button>
+  <button id="music" class="hud-btn" data-i18n-attr="aria-label:hud.music;title:hud.music">🎵</button>
 </div>
-<div id="help">Muévete con flechas/WASD o arrastrando el dedo<br><b>Mata enemigos → recoge monedas → llévalas a las parcelas</b></div>
+<div id="help" data-i18n-html="help"></div>
 <div id="joy"><div id="joy-knob"></div></div>
 <div id="title" class="hidden">
   <h1 class="logo"><img src="/logo.webp" alt="Coinkeep" width="1200" height="400"></h1>
-  <p class="tagline">Defiende el castillo · Guarda cada moneda</p>
+  <p class="tagline" data-i18n="title.tagline"></p>
   <div class="menu">
-    <div class="diff" id="diff" role="radiogroup" aria-label="Dificultad"></div>
-    <button class="menu-btn" id="show-board">🏆 Clasificación</button>
+    <div class="diff" id="diff" role="radiogroup" data-i18n-attr="aria-label:title.difficulty"></div>
+    <div class="menu-row">
+      <button class="menu-btn" id="show-board" data-i18n="title.leaderboard"></button>
+      <button class="menu-btn" id="show-news"><span data-i18n="title.news"></span><span class="news-dot hidden" id="news-dot"></span></button>
+    </div>
+  </div>
+  <div class="board news hidden" id="news">
+    <div class="board-head"><b data-i18n="title.news"></b><span id="news-version"></span><button class="board-close" id="news-close" data-i18n-attr="aria-label:title.close">✕</button></div>
+    <div class="news-body" id="news-body"></div>
   </div>
   <div class="board hidden" id="board">
-    <div class="board-head"><b>🏆 Clasificación</b><span id="board-diff"></span><button class="board-close" id="board-close" aria-label="Cerrar">✕</button></div>
+    <div class="board-head"><b data-i18n="title.leaderboard"></b><span id="board-diff"></span><button class="board-close" id="board-close" data-i18n-attr="aria-label:title.close">✕</button></div>
     <ol id="board-list"></ol>
   </div>
-  <p class="start">Toca la pantalla o pulsa una tecla para jugar</p>
-  <p class="byline">Pablo Fernández · <i>vibe coded</i> con Claude Opus 5.5</p>
+  <p class="start" data-i18n="title.start"></p>
+  <div class="lang" id="lang" role="radiogroup" data-i18n-attr="aria-label:title.language"></div>
+  <p class="byline" data-i18n-html="title.byline"></p>
 </div>
 <div id="gameover" class="hidden">
-  <h1>¡La base ha caído!</h1>
+  <h1 data-i18n="over.title"></h1>
   <p id="go-text"></p>
   <form class="go-form hidden" id="go-form" autocomplete="off">
-    <input id="go-name" maxlength="16" placeholder="Tu nombre" aria-label="Tu nombre" enterkeyhint="send">
-    <button class="menu-btn" id="go-send" type="submit">Guardar récord</button>
+    <input id="go-name" maxlength="16" data-i18n-attr="placeholder:over.name;aria-label:over.name" enterkeyhint="send">
+    <button class="menu-btn" id="go-send" type="submit" data-i18n="over.send"></button>
   </form>
   <p class="go-msg" id="go-msg"></p>
   <ol class="go-list" id="go-list"></ol>
   <div class="go-buttons">
-    <button class="menu-btn primary" id="go-again">Jugar otra vez</button>
-    <button class="menu-btn" id="go-menu">Menú</button>
+    <button class="menu-btn primary" id="go-again" data-i18n="over.again"></button>
+    <button class="menu-btn" id="go-menu" data-i18n="over.menu"></button>
   </div>
 </div>
 <script type="module" src="/src/main.ts"></script>

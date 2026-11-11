@@ -1,7 +1,7 @@
 // ============================================================
-//  Trucos del menú de desarrollador. Funciones puras sobre el
-//  GameState (sin Three.js ni DOM), igual que la simulación.
-//  Cualquier truco marca la partida como «con trampas».
+//  Developer menu cheats. Pure functions over the GameState
+//  (no Three.js or DOM), just like the simulation.
+//  Any cheat marks the game as "cheated".
 // ============================================================
 import { BASE, CASTLE_HALF, PLAYER, TOWER_UPGRADE } from '../config';
 import { completePad, killEnemy, placeProps, spawnEnemy } from './sim';
@@ -10,10 +10,10 @@ import type { EnemyKind, GameState, Pad, PadType, Vec } from './types';
 export const mark = (G: GameState) => { G.cheated = true; };
 
 // ------------------------------------------------------------
-//  Enemigos y oleadas
+//  Enemies and waves
 // ------------------------------------------------------------
 
-/** Saca `n` enemigos: desde el bosque (repartidos) o en un anillo cerca del jugador. */
+/** Spawns `n` enemies: from the forest (spread out) or in a ring near the player. */
 export function spawnMany(G: GameState, n: number, where: 'forest' | 'near', boss = false, kind?: EnemyKind) {
   mark(G);
   const p = G.player;
@@ -21,13 +21,13 @@ export function spawnMany(G: GameState, n: number, where: 'forest' | 'near', bos
     if (where === 'forest') { spawnEnemy(G, boss, undefined, kind); continue; }
     const a = Math.random() * Math.PI * 2, r = 3 + Math.random() * 2.5;
     let at: Vec = { x: p.x + Math.cos(a) * r, y: p.y + Math.sin(a) * r };
-    // que no aparezcan dentro del castillo
+    // don't let them appear inside the castle
     if (Math.max(Math.abs(at.x - BASE.x), Math.abs(at.y - BASE.y)) < CASTLE_HALF + 0.5) at = { x: BASE.x + Math.cos(a) * 4, y: BASE.y + Math.sin(a) * 4 };
     spawnEnemy(G, boss, at, kind);
   }
 }
 
-/** Salta a la oleada N: empieza ya, con la cantidad y dureza de esa oleada. */
+/** Jumps to wave N: starts right now, with that wave's size and toughness. */
 export function jumpToWave(G: GameState, n: number) {
   mark(G);
   G.wave = Math.max(0, Math.floor(n) - 1);
@@ -37,7 +37,7 @@ export function jumpToWave(G: GameState, n: number) {
 
 export function nextWaveNow(G: GameState) { mark(G); G.waveTimer = 0; }
 
-/** Mata a todos los enemigos (sueltan sus monedas, como si los hubiera matado el jugador). */
+/** Kills every enemy (they drop their coins, as if the player had killed them). */
 export function killAll(G: GameState, withCoins: boolean) {
   mark(G);
   if (withCoins) for (const e of G.enemies) killEnemy(G, e, null, 'sword');
@@ -47,7 +47,7 @@ export function killAll(G: GameState, withCoins: boolean) {
 }
 
 // ------------------------------------------------------------
-//  Castillo y jugador
+//  Castle and player
 // ------------------------------------------------------------
 export function setBaseHp(G: GameState, hp: number) { mark(G); G.base.hp = Math.max(1, Math.min(G.base.max, hp)); }
 
@@ -59,25 +59,25 @@ export function teleport(G: GameState, to: Vec) {
   G.padDwellId = -1; G.padDwell = 0;
 }
 
-/** Punto delante de la puerta del castillo. */
+/** Point in front of the castle gate. */
 export const castleFront = (): Vec => ({ x: PLAYER.start.x, y: PLAYER.start.y });
 
 // ------------------------------------------------------------
-//  Economía
+//  Economy
 // ------------------------------------------------------------
 export function addCoins(G: GameState, n: number) { mark(G); G.player.coins += n; }
 
-/** Hace visibles todas las parcelas que aún no han salido. */
+/** Reveals every pad that hasn't appeared yet. */
 export function unlockAllPads(G: GameState) {
   mark(G);
   for (const pad of G.pads) if (!pad.done) pad.active = true;
 }
 
 // ------------------------------------------------------------
-//  Construcción
+//  Building
 // ------------------------------------------------------------
 
-/** Completa una parcela gratis (no cuenta como gasto en el registro). */
+/** Completes a pad for free (doesn't count as spending in the log). */
 function finish(G: GameState, pad: Pad) {
   pad.active = true;
   pad.paid = pad.cost;
@@ -85,7 +85,7 @@ function finish(G: GameState, pad: Pad) {
   completePad(G, pad);
 }
 
-/** Construye todas las torres cuyas parcelas están a la vista (con `all`, también las aún ocultas). */
+/** Builds every tower whose pad is visible (with `all`, also the still hidden ones). */
 export function buildAllTowers(G: GameState, all = false) {
   mark(G);
   for (const pad of [...G.pads]) {
@@ -93,7 +93,7 @@ export function buildAllTowers(G: GameState, all = false) {
   }
 }
 
-/** Sube todas las torres construidas al nivel máximo. */
+/** Raises every built tower to the max level. */
 export function maxAllTowers(G: GameState) {
   mark(G);
   for (const pad of G.pads) {
@@ -104,7 +104,7 @@ export function maxAllTowers(G: GameState) {
   }
 }
 
-/** Sube N niveles una parcela repetible (fuerza, forja, lobos, peones, reparar). */
+/** Levels up a repeatable pad N times (power, forge, wolves, peons, repair). */
 export function levelUp(G: GameState, type: PadType, times = 1) {
   mark(G);
   const pad = G.pads.find(p => p.type === type);
@@ -112,11 +112,11 @@ export function levelUp(G: GameState, type: PadType, times = 1) {
   for (let i = 0; i < times; i++) finish(G, pad);
 }
 
-/** Nivel actual de una parcela repetible. */
+/** Current level of a repeatable pad. */
 export const padLevel = (G: GameState, type: PadType) => G.pads.find(p => p.type === type)?.level ?? 0;
 
 // ------------------------------------------------------------
-//  Mundo
+//  World
 // ------------------------------------------------------------
 export function regenProps(G: GameState) {
   mark(G);
@@ -125,9 +125,9 @@ export function regenProps(G: GameState) {
 }
 
 /**
- * Escena de la pantalla de título: castillo nivel 4, las cuatro torres más cercanas ya mejoradas,
- * dos lobos y un pícaro con monedas. El castillo es invulnerable y no se ven parcelas.
- * Los zombis los va sacando `showcaseTick`.
+ * Title screen scene: castle level 4, the four nearest towers already upgraded,
+ * two wolves and a rogue with some coins. The castle is invulnerable and no pads are shown.
+ * `showcaseTick` keeps the zombies coming.
  */
 export function showcase(G: GameState) {
   G.dev.godCastle = true;
@@ -137,22 +137,22 @@ export function showcase(G: GameState) {
   for (const pad of [...G.pads]) if ((pad.type === 'archer' || pad.type === 'cannon') && pad.unlock <= 3) finish(G, pad);
   for (const pad of G.pads) if (pad.type === 'upgrade') { finish(G, pad); if (Math.random() < 0.6) finish(G, pad); }
   levelUp(G, 'kennel', 2);
-  for (const pad of G.pads) pad.active = false;      // sin carteles de parcelas
+  for (const pad of G.pads) pad.active = false;      // no pad signs
   G.player.coins = 24;
-  G.events.length = 0;                                // sin textos flotantes de «¡Torre!»
+  G.events.length = 0;                                // no floating "Tower!" texts
 }
 
-/** Mantiene unos cuantos zombis llegando al castillo en la pantalla de título. */
+/** Keeps a few zombies walking up to the castle on the title screen. */
 export function showcaseTick(G: GameState) {
   if (G.enemies.length < 9 && Math.random() < 0.03) spawnEnemy(G, Math.random() < 0.06);
-  G.player.coins = Math.min(G.player.coins, 40);      // que la pila no crezca hasta el cielo
+  G.player.coins = Math.min(G.player.coins, 40);      // keep the coin stack from growing sky-high
   for (const pad of G.pads) pad.active = false;
   G.events = G.events.filter(e => e.type !== 'text');
 }
 
 /**
- * Movimiento del piloto automático (para la simulación rápida): va a por el enemigo más cercano
- * al castillo hasta tenerlo a tiro de ballesta; si no hay enemigos, vuelve a la puerta.
+ * Autopilot movement (for the fast simulation): goes after the enemy closest to the castle
+ * until it's within crossbow range; with no enemies, it returns to the gate.
  */
 export function autopilotDir(G: GameState): Vec {
   const p = G.player;
@@ -168,7 +168,7 @@ export function autopilotDir(G: GameState): Vec {
   return { x: dx / d, y: dy / d };
 }
 
-/** Datos de la oleada en curso (lo que se enviará al registro al acabarla). */
+/** Data for the current wave (what will be sent to the log when it ends). */
 export function liveWave(G: GameState) {
   const s = G.stats, l = s.last;
   const sub = (a: Record<string, number>, b: Record<string, number>) => {

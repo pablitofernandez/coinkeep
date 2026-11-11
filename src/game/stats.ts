@@ -1,6 +1,6 @@
 // ============================================================
-//  Registro de partida: contadores + una foto por oleada.
-//  Sirve para analizar partidas y equilibrar la dificultad.
+//  Game log: counters + one snapshot per wave.
+//  Used to analyse games and balance the difficulty.
 // ============================================================
 import { enemyStats } from '../config';
 import type { Counters, GameState, Stats, WaveLog } from './types';
@@ -34,7 +34,7 @@ function diffRecord<K extends string>(now: Partial<Record<K, number>>, before: P
   return out;
 }
 
-/** Guarda la foto de la oleada actual (se llama al empezar la siguiente o al perder). */
+/** Saves the snapshot of the current wave (called when the next one starts or when you lose). */
 export function logWave(G: GameState) {
   const s = G.stats, l = s.last;
   const normal = enemyStats(G.wave, false, 'zombie', G.difficulty);

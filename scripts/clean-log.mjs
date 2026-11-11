@@ -1,11 +1,11 @@
 // ============================================================
-//  Limpieza de la telemetría descargada de Supabase (la usa pull-logs.mjs).
+//  Cleanup of the telemetry downloaded from Supabase (used by pull-logs.mjs).
 //
-//  Cualquiera con la clave pública puede insertar filas en game_logs, así que lo
-//  que llega de la tabla es dato de TERCEROS: se reconstruye cada registro solo
-//  con las claves que manda el juego (src/telemetry.ts, src/game/stats.ts) y con
-//  el tipo y formato esperados. Lo que no encaja se descarta. Así ningún texto
-//  libre llega a logs/remote/ (ni a quien los lea, persona o asistente de IA).
+//  Anyone with the public key can insert rows into game_logs, so whatever
+//  comes from the table is THIRD-PARTY data: each record is rebuilt using only
+//  the keys the game sends (src/telemetry.ts, src/game/stats.ts), with the
+//  expected type and format. Anything that doesn't fit is discarded. That way no
+//  free text reaches logs/remote/ (nor whoever reads them, human or AI assistant).
 // ============================================================
 
 const isNum = v => typeof v === 'number' && Number.isFinite(v);
@@ -15,11 +15,11 @@ const TOWERS = /^([AC]\d{1,3}( [AC]\d{1,3})*)?$/;
 const PADS = /^((archer|cannon|power|repair|forge|kennel|peon|upgrade)\d{1,3}( (archer|cannon|power|repair|forge|kennel|peon|upgrade)\d{1,3})*)?$/;
 const VERSION = /^([0-9a-f]{7,40}|dev)$/;
 const SCREEN = /^\d{1,5}x\d{1,5}@\d{1,2}(\.\d{1,2})?$/;
-const PLATFORMS = ['iPhone', 'iPad', 'Android', 'Windows', 'Mac', 'Linux', 'Otro'];
+const PLATFORMS = ['iPhone', 'iPad', 'Android', 'Windows', 'Mac', 'Linux', 'Otro'];   // 'Otro' (= other) is the value the game sends
 const DIFFICULTIES = ['normal', 'hard', 'nightmare'];
 const EVENTS = ['wave', 'over', 'left'];
 
-/** Un objeto plano de clave corta (solo minúsculas) → número. Si algo no encaja, null. */
+/** A flat object of short key (lowercase only) → number. If anything doesn't fit, null. */
 function counters(o, allowed) {
   if (!o || typeof o !== 'object' || Array.isArray(o)) return null;
   const out = {};
@@ -39,7 +39,7 @@ const pickNums = (o, keys) => {
 const WAVE_NUMS = ['wave', 't', 'duration', 'baseHp', 'baseMax', 'coinsHeld', 'tablesLoot', 'groundCoins',
   'enemiesAlive', 'enemyHp', 'enemyValue', 'baseDamage', 'spawned', 'towerMult'];
 
-/** Una oleada (WaveLog) limpia, o null si no tiene la forma esperada. */
+/** A clean wave (WaveLog), or null if it doesn't have the expected shape. */
 export function cleanWave(w) {
   if (!w || typeof w !== 'object' || Array.isArray(w)) return null;
   const nums = pickNums(w, WAVE_NUMS);
@@ -54,7 +54,7 @@ export function cleanWave(w) {
   return { ...nums, earned, spent, kills, spawnedKind, towers: w.towers, helpers, player, pads: w.pads };
 }
 
-/** La foto «now» de una fila, o undefined. */
+/** A row's "now" snapshot, or undefined. */
 function cleanNow(n) {
   if (!n || typeof n !== 'object') return undefined;
   const nums = pickNums(n, ['baseHp', 'baseMax', 'coins', 'towerMult', 'enemiesAlive', 'built']);
@@ -63,7 +63,7 @@ function cleanNow(n) {
   return { ...nums, towers: n.towers, helpers };
 }
 
-/** Los totales de una fila, o undefined. */
+/** A row's totals, or undefined. */
 function cleanTotals(t) {
   if (!t || typeof t !== 'object') return undefined;
   const nums = pickNums(t, ['baseDamage', 'spawned']);
@@ -74,8 +74,8 @@ function cleanTotals(t) {
 }
 
 /**
- * Una fila de game_logs limpia, o null si las columnas no tienen el formato del juego.
- * Las oleadas que no encajan se descartan una a una (y se cuentan en `badWaves`).
+ * A clean game_logs row, or null if the columns don't have the game's format.
+ * Waves that don't fit are discarded one by one (and counted in `badWaves`).
  */
 export function cleanRow(row) {
   if (!row || typeof row !== 'object') return null;

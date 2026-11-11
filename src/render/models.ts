@@ -1,7 +1,7 @@
 // ============================================================
-//  Modelos procedurales que no vienen de los packs de Kenney:
-//  mesas, parcelas, la caseta del perro y la moneda.
-//  (personajes, torres, castillo y cabaña están en kit.ts)
+//  Procedural models that don't come from the Kenney packs:
+//  tables, pads, the dog kennel and the coin.
+//  (characters, towers, castle and hut live in kit.ts)
 // ============================================================
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -29,12 +29,12 @@ function mesh(geo: THREE.BufferGeometry, material: THREE.Material, x = 0, y = 0,
 }
 
 // ------------------------------------------------------------
-//  Detalles comunes para "subir de nivel" la caseta
+//  Common details to "level up" the kennel
 // ------------------------------------------------------------
 const GOLD = () => mat('#ffcc33', { metal: 0.7, rough: 0.3, emissive: '#3a2a00' });
 const CRYSTAL = () => mat('#7fe7ff', { rough: 0.2, emissive: '#2a8fb0' });
 
-/** Mástil con banderín (la tela se llama 'flag' para que el render la haga ondear). */
+/** Pole with a pennant (the cloth is named 'flag' so the renderer makes it wave). */
 function pennant(g: THREE.Group, x: number, y: number, z: number, color: string, h = 0.5, named = false) {
   g.add(mesh(new THREE.CylinderGeometry(0.02, 0.02, h, 5), mat('#5a3a1e'), x, y + h / 2, z));
   const f = mesh(new THREE.BoxGeometry(0.26, 0.16, 0.02), mat(color), x + 0.13, y + h - 0.1, z);
@@ -42,7 +42,7 @@ function pennant(g: THREE.Group, x: number, y: number, z: number, color: string,
   g.add(f);
 }
 
-/** Cristal brillante flotando (nivel máximo). */
+/** Floating shiny crystal (max level). */
 function crystal(g: THREE.Group, y: number, size = 0.14, x = 0, z = 0) {
   const c = mesh(new THREE.OctahedronGeometry(size, 0), CRYSTAL(), x, y, z);
   c.name = 'crystal';
@@ -50,7 +50,7 @@ function crystal(g: THREE.Group, y: number, size = 0.14, x = 0, z = 0) {
 }
 
 // ------------------------------------------------------------
-//  Mesa del botín de cada torre
+//  Loot table for each tower
 // ------------------------------------------------------------
 export function makeTable(): THREE.Group {
   const g = new THREE.Group();
@@ -62,7 +62,7 @@ export function makeTable(): THREE.Group {
 }
 
 // ------------------------------------------------------------
-//  Parcela de construcción
+//  Build pad
 // ------------------------------------------------------------
 let frameGeo: THREE.BufferGeometry | null = null;
 function padFrameGeo() {
@@ -94,10 +94,10 @@ export function makePad(): PadModel {
   const fillMat = new THREE.MeshBasicMaterial({ color: '#ffd34d', transparent: true, opacity: 0.6, depthWrite: false });
   const fill = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.4), fillMat);
   fill.rotation.x = -Math.PI / 2; fill.position.y = 0.025;
-  fill.geometry.translate(0, 0.7, 0);       // escalado desde un borde
+  fill.geometry.translate(0, 0.7, 0);       // scaled from one edge
   fill.position.z = 0.7;
   root.add(fill);
-  // marco de "guiones": una sola malla (geometría compartida por todas las parcelas)
+  // dashed frame: a single mesh (geometry shared by all pads)
   const frame = new THREE.Group();
   const white = new THREE.MeshBasicMaterial({ color: '#ffffff' });
   frame.add(new THREE.Mesh(padFrameGeo(), white));
@@ -106,9 +106,9 @@ export function makePad(): PadModel {
 }
 
 // ------------------------------------------------------------
-//  Caseta del perro
+//  Dog kennel
 // ------------------------------------------------------------
-/** Caseta del perro. Nivel 1..5 (sube al mejorar a los perros). */
+/** Dog kennel. Level 1..5 (goes up when the dogs are upgraded). */
 export function makeKennel(level = 1): THREE.Group {
   const g = new THREE.Group();
   const L = Math.max(1, Math.min(5, level));
@@ -116,11 +116,11 @@ export function makeKennel(level = 1): THREE.Group {
     const k = new THREE.Group();
     const wood = mat(woodColor);
     k.add(mesh(new THREE.BoxGeometry(0.7, 0.5, 0.7), wood, 0, 0.25, 0));
-    // tejado a dos aguas
+    // gabled roof
     const r1 = mesh(new THREE.BoxGeometry(0.5, 0.05, 0.82), roofMat, -0.2, 0.62, 0); r1.rotation.z = 0.7;
     const r2 = mesh(new THREE.BoxGeometry(0.5, 0.05, 0.82), roofMat, 0.2, 0.62, 0); r2.rotation.z = -0.7;
     k.add(r1, r2);
-    // frontón y puerta (mira hacia +z, hacia la cámara)
+    // gable and door (faces +z, towards the camera)
     const gable = new THREE.Shape();
     gable.moveTo(-0.35, 0); gable.lineTo(0.35, 0); gable.lineTo(0, 0.32); gable.lineTo(-0.35, 0);
     const gableGeo = new THREE.ShapeGeometry(gable);
@@ -134,15 +134,15 @@ export function makeKennel(level = 1): THREE.Group {
   const roof = L >= 5 ? GOLD() : mat(L >= 3 ? '#2f5fc4' : '#c0392b');
   const main = one(1 + (L - 1) * 0.12, L >= 3 ? '#e2c48e' : '#c98b4a', roof);
   g.add(main);
-  // cuenco
+  // bowl
   g.add(mesh(new THREE.CylinderGeometry(0.1, 0.08, 0.06, 10), mat('#3a6ccf'), 0.48, 0.03, 0.35));
-  // hueso sobre la puerta (nivel 2+)
+  // bone above the door (level 2+)
   if (L >= 2) {
     const s = 1 + (L - 1) * 0.12, bone = mat('#f3e9d2');
     g.add(mesh(new THREE.BoxGeometry(0.22, 0.05, 0.03), bone, 0, 0.42 * s, 0.37 * s));
     for (const x of [-0.11, 0.11]) g.add(mesh(new THREE.SphereGeometry(0.04, 6, 4), bone, x, 0.42 * s, 0.37 * s));
   }
-  // valla (nivel 3+)
+  // fence (level 3+)
   if (L >= 3) {
     const post = new THREE.BoxGeometry(0.05, 0.22, 0.05), w = mat('#8a5a2b');
     for (let k = -3; k <= 3; k++) {
@@ -152,7 +152,7 @@ export function makeKennel(level = 1): THREE.Group {
     g.add(mesh(new THREE.BoxGeometry(1.15, 0.04, 0.03), w, 0, 0.17, -0.65));
     g.add(mesh(new THREE.BoxGeometry(0.03, 0.04, 1.15), w, -0.75, 0.17, -0.1));
   }
-  // segunda caseta (nivel 4+)
+  // second kennel (level 4+)
   if (L >= 4) {
     const second = one(0.75, '#c98b4a', roof);
     second.position.set(0.15, 0, -1.0);
@@ -163,7 +163,7 @@ export function makeKennel(level = 1): THREE.Group {
 }
 
 // ------------------------------------------------------------
-//  Geometrías compartidas para instancias / efectos
+//  Shared geometries for instances / effects
 // ------------------------------------------------------------
 export const coinGeo = new THREE.CylinderGeometry(0.15, 0.15, 0.05, 12);
 export const coinMat = new THREE.MeshStandardMaterial({ color: '#ffcc33', metalness: 0.7, roughness: 0.3, emissive: '#5a3d00', flatShading: true });

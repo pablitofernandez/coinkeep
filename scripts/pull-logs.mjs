@@ -1,14 +1,14 @@
 // ============================================================
-//  npm run logs:pull — descarga la telemetría de Supabase (tabla game_logs)
-//  y la guarda en logs/remote/, un archivo por partida, con el mismo formato
-//  que los registros locales de logs/ (session, device, result, totals, waves[]).
+//  npm run logs:pull — downloads the telemetry from Supabase (game_logs table)
+//  and saves it to logs/remote/, one file per game, in the same format
+//  as the local logs in logs/ (session, device, result, totals, waves[]).
 //
-//  Necesita la clave SECRETA de Supabase en .env.local (nunca se sube):
+//  Needs the Supabase SECRET key in .env.local (never committed):
 //    SUPABASE_SECRET_KEY=sb_secret_…
-//  La URL la toma de .env (VITE_SUPABASE_URL).
+//  The URL is taken from .env (VITE_SUPABASE_URL).
 //
-//  OJO: las filas las puede escribir cualquiera (clave pública). Todo pasa por
-//  clean-log.mjs, que se queda solo con los campos y formatos que manda el juego.
+//  CAREFUL: anyone can write rows (public key). Everything goes through
+//  clean-log.mjs, which keeps only the fields and formats the game sends.
 // ============================================================
 import fs from 'node:fs';
 import path from 'node:path';
@@ -16,7 +16,7 @@ import { cleanRow, cleanWave } from './clean-log.mjs';
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/(\w:)/, '$1')), '..');
 
-/** Lee un archivo .env sencillo (CLAVE=valor). */
+/** Reads a simple .env file (KEY=value). */
 function readEnv(file) {
   const env = {};
   const p = path.join(root, file);
@@ -29,18 +29,18 @@ function readEnv(file) {
 }
 const pub = readEnv('.env'), local = readEnv('.env.local');
 const URL_ = (local.VITE_SUPABASE_URL ?? pub.VITE_SUPABASE_URL ?? '').replace(/\/$/, '');
-// la clave secreta SOLO de .env.local: .env se sube al repo público
+// the secret key ONLY from .env.local: .env is committed to the public repo
 const KEY = local.SUPABASE_SECRET_KEY;
 if (pub.SUPABASE_SECRET_KEY) {
-  console.error('¡Cuidado! Hay una SUPABASE_SECRET_KEY en .env, que se sube al repo público. Muévela a .env.local (y cámbiala en Supabase si ya se subió).');
+  console.error('Careful! There is a SUPABASE_SECRET_KEY in .env, which is committed to the public repo. Move it to .env.local (and rotate it in Supabase if it was already pushed).');
   process.exit(1);
 }
 if (!URL_ || !KEY) {
-  console.error('Falta VITE_SUPABASE_URL en .env o SUPABASE_SECRET_KEY en .env.local');
+  console.error('Missing VITE_SUPABASE_URL in .env or SUPABASE_SECRET_KEY in .env.local');
   process.exit(1);
 }
 if (!URL_.startsWith('https://')) {
-  console.error('VITE_SUPABASE_URL debe empezar por https:// (la clave secreta no se manda sin cifrar)');
+  console.error('VITE_SUPABASE_URL must start with https:// (the secret key is never sent unencrypted)');
   process.exit(1);
 }
 const headers = { apikey: KEY, ...(KEY.startsWith('eyJ') ? { Authorization: `Bearer ${KEY}` } : {}) };
@@ -50,22 +50,22 @@ fs.mkdirSync(dir, { recursive: true });
 const cursorFile = path.join(dir, '.cursor');
 let cursor = fs.existsSync(cursorFile) ? Number(fs.readFileSync(cursorFile, 'utf8')) || 0 : 0;
 
-// 1) filas nuevas desde la última descarga, por páginas
+// 1) new rows since the last download, page by page
 const rawRows = [];
 for (;;) {
   const r = await fetch(`${URL_}/rest/v1/game_logs?id=gt.${cursor}&order=id.asc&limit=1000`, { headers });
-  if (!r.ok) { console.error('Error de Supabase:', r.status, (await r.text()).slice(0, 300)); process.exit(1); }
+  if (!r.ok) { console.error('Supabase error:', r.status, (await r.text()).slice(0, 300)); process.exit(1); }
   const page = await r.json();
-  if (!Array.isArray(page)) { console.error('Respuesta inesperada de Supabase'); process.exit(1); }
+  if (!Array.isArray(page)) { console.error('Unexpected response from Supabase'); process.exit(1); }
   rawRows.push(...page);
   if (page.length < 1000) break;
   const lastId = page[page.length - 1]?.id;
-  if (!Number.isInteger(lastId)) { console.error('Respuesta inesperada de Supabase'); process.exit(1); }
+  if (!Number.isInteger(lastId)) { console.error('Unexpected response from Supabase'); process.exit(1); }
   cursor = lastId;
 }
-if (!rawRows.length) { console.log('No hay partidas nuevas.'); process.exit(0); }
+if (!rawRows.length) { console.log('No new games.'); process.exit(0); }
 
-// 2) limpiar: lo que no tenga la forma del juego se descarta
+// 2) clean: anything that doesn't have the game's shape is discarded
 const rows = [];
 let badRows = 0, badWaves = 0;
 for (const raw of rawRows) {
@@ -75,7 +75,7 @@ for (const raw of rawRows) {
   rows.push(row);
 }
 
-// 3) juntar por partida (añadiendo a lo ya descargado de esa partida)
+// 3) group by game (appending to what was already downloaded for that game)
 const bySession = new Map();
 for (const row of rows) {
   if (!bySession.has(row.session)) bySession.set(row.session, []);
@@ -95,7 +95,7 @@ for (const [session, list] of bySession) {
       device: { mobile: list[0].mobile, screen: list[0].screen, platform: list[0].platform },
       waves: [], events: [],
     };
-    // los archivos descargados antes de existir este filtro también pasan por él
+    // files downloaded before this filter existed also go through it
     log.waves = (Array.isArray(log.waves) ? log.waves : []).map(cleanWave).filter(Boolean);
     if (!Array.isArray(log.events)) log.events = [];
     for (const row of list) {
@@ -113,10 +113,10 @@ for (const [session, list] of bySession) {
     if (existing) updated++; else created++;
   } catch (e) {
     failed++;
-    console.error(`No se pudo guardar la partida ${session.slice(0, 8)}: ${e.message}`);
+    console.error(`Could not save game ${session.slice(0, 8)}: ${e.message}`);
   }
 }
 fs.writeFileSync(cursorFile, String(rawRows[rawRows.length - 1].id));
-console.log(`${rawRows.length} filas · ${created} partidas nuevas, ${updated} actualizadas → logs/remote/`);
-if (badRows || badWaves) console.warn(`⚠ Descartadas por no tener el formato del juego: ${badRows} filas y ${badWaves} oleadas. Puede ser basura metida a mano en la tabla: revísala en el panel de Supabase.`);
-if (failed) console.warn(`⚠ ${failed} partidas no se pudieron guardar.`);
+console.log(`${rawRows.length} rows · ${created} new games, ${updated} updated → logs/remote/`);
+if (badRows || badWaves) console.warn(`⚠ Discarded for not matching the game's format: ${badRows} rows and ${badWaves} waves. It may be junk inserted by hand into the table: check it in the Supabase dashboard.`);
+if (failed) console.warn(`⚠ ${failed} games could not be saved.`);

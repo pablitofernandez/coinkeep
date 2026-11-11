@@ -1,18 +1,18 @@
 // ============================================================
-//  Etiquetas HTML pegadas a objetos 3D (precios, barras de vida,
-//  estrellas, textos flotantes). Sustituye a CSS2DRenderer de Three.js,
-//  que en cada fotograma reescribía el estilo de TODAS las etiquetas
-//  (también las de fuera de pantalla) y las reordenaba por distancia:
-//  en Safari/iPhone eso costaba mucho procesador.
+//  HTML labels attached to 3D objects (prices, health bars, stars,
+//  floating texts). Replaces Three.js's CSS2DRenderer, which every
+//  frame rewrote the style of ALL labels (including off-screen ones)
+//  and re-sorted them by distance: on Safari/iPhone that cost a lot
+//  of CPU.
 //
-//  Este solo toca el DOM cuando algo cambia de verdad, oculta lo que
-//  queda fuera de pantalla y redondea a píxeles enteros (sin temblor
-//  ni rastros de un píxel). Usa los mismos CSS2DObject de Three.js.
+//  This one only touches the DOM when something actually changes,
+//  hides what is off-screen and rounds to whole pixels (no jitter or
+//  one-pixel trails). It uses the same Three.js CSS2DObjects.
 // ============================================================
 import * as THREE from 'three';
 import type { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
-/** Margen (px) fuera de pantalla antes de ocultar una etiqueta (las grandes no deben cortarse de golpe). */
+/** Off-screen margin (px) before hiding a label (big ones must not get cut off abruptly). */
 const MARGIN = 120;
 
 interface LabelState { shown: boolean; tx: number; ty: number }
@@ -35,7 +35,7 @@ export class LabelRenderer {
     this.domElement.style.height = height + 'px';
   }
 
-  /** Llamar justo después de renderer.render (las matrices ya están actualizadas). */
+  /** Call right after renderer.render (matrices are already up to date). */
   render(scene: THREE.Scene, camera: THREE.Camera) {
     this.viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     this.visit(scene, true);

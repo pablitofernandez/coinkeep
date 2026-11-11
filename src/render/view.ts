@@ -1,11 +1,12 @@
 // ============================================================
-//  Render 3D: escena, cámara isométrica ortográfica, luces,
-//  y sincronización de las entidades del estado con mallas.
+//  3D render: scene, orthographic isometric camera, lights,
+//  and syncing of the state's entities with meshes.
 // ============================================================
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { LabelRenderer } from './labels';
 import { BASE, PAD_INFO, WORLD } from '../config';
+import { t } from '../i18n';
 import type { GameEvent, GameState, HelperKind, Point3 } from '../game/types';
 import {
   coinGeo, coinMat, makeKennel, makePad, makeTable, mat,
@@ -18,13 +19,13 @@ import {
   type KnightModel, type TowerModel,
 } from './kit';
 
-// Dirección de la cámara (desde el objetivo). Con x = z se obtiene la vista isométrica clásica.
+// Camera direction (from the target). With x = z you get the classic isometric view.
 const CAM_OFFSET = new THREE.Vector3(12, 14, 12);
 export const CAM_ELEVATION_SIN = CAM_OFFSET.y / CAM_OFFSET.length();
 
 const MAX_COINS = 4000;
-const STACK_STEP = 0.055;   // separación vertical de las monedas en la pila
-const SHOOT_POSE = 0.5;     // segundos que dura el gesto de disparar la ballesta
+const STACK_STEP = 0.055;   // vertical spacing of the coins in the stack
+const SHOOT_POSE = 0.5;     // seconds the crossbow shooting gesture lasts
 
 function label(className: string, html = ''): CSS2DObject {
   const el = document.createElement('div');
@@ -33,7 +34,7 @@ function label(className: string, html = ''): CSS2DObject {
   return new CSS2DObject(el);
 }
 const MOBILE = window.matchMedia('(pointer: coarse)').matches;
-// Escribir en el DOM solo cuando el valor cambia (cada escritura fuerza trabajo de maquetación)
+// Write to the DOM only when the value changes (every write forces layout work)
 const domCache = new WeakMap<HTMLElement, string>();
 function setText(el: HTMLElement, v: string) { if (domCache.get(el) !== v) { domCache.set(el, v); el.textContent = v; } }
 function setWidth(el: HTMLElement, pct: number) {
@@ -50,7 +51,7 @@ const lerpAngle = (a: number, b: number, k: number) => {
   return a + d * k;
 };
 
-// Geometría compartida para el polvo al andar
+// Shared geometry for the walking dust
 const PUFF_GEO = new THREE.IcosahedronGeometry(1, 1);
 
 interface Flyer { from: Point3; to: Point3 | 'player'; t: number; dur: number }
@@ -60,17 +61,17 @@ interface Fx { obj: THREE.Object3D; life: number; max: number; update: (k: numbe
 export class View {
   readonly renderer: THREE.WebGLRenderer;
   readonly labels: LabelRenderer;
-  /** Milisegundos por fotograma (media suave): dibujo 3D y etiquetas HTML. Lo enseña el menú de desarrollo. */
+  /** Milliseconds per frame (smoothed average): 3D drawing and HTML labels. Shown by the dev menu. */
   readonly timing = { gl: 0, labels: 0 };
   /**
-   * Cada cuántos fotogramas se recalcula el mapa de sombras. En móvil, 2: casi la mitad de llamadas de dibujo.
-   * Lo quieto no cambia; lo que se mueve actualiza su sombra a 30 fps (apenas se nota en vista cenital).
+   * How many frames between shadow map recomputes. On mobile, 2: almost half the draw calls.
+   * Static things don't change; moving things update their shadow at 30 fps (barely noticeable from above).
    */
   shadowEvery = MOBILE ? 2 : 1;
   private frameNo = 0;
   readonly scene = new THREE.Scene();
   readonly camera: THREE.OrthographicCamera;
-  /** Líneas de depuración (menú de desarrollo). */
+  /** Debug lines (dev menu). */
   readonly debug: DebugDraw;
   private sun: THREE.DirectionalLight;
   private camTarget = new THREE.Vector3();
@@ -80,7 +81,7 @@ export class View {
   private lastAttackT = 0;
   private propsRef: GameState['props'] | null = null;
   private propMeshes: THREE.InstancedMesh[] = [];
-  private shootT = SHOOT_POSE;    // tiempo desde el último disparo de ballesta
+  private shootT = SHOOT_POSE;    // time since the last crossbow shot
   private playerCoinsLabel: CSS2DObject;
   private castle: THREE.Group;
   private castleLevel = 1;
@@ -90,7 +91,7 @@ export class View {
   private coins: THREE.InstancedMesh;
 
   private enemies = new Map<number, { em: EnemyModel; ch: Character; hp: CSS2DObject; flash: string; castT: number }>();
-  // enemigos muertos que aún se ven caer
+  // dead enemies still visibly falling
   private dying: { ch: Character; t: number; y0: number }[] = [];
   private towers = new Map<number, { m: TowerModel; table: THREE.Group; tableLabel: CSS2DObject; stars: CSS2DObject; born: number; level: number; topY: number }>();
   private pads = new Map<number, { m: PadModel; label: CSS2DObject; pop: number }>();
@@ -100,7 +101,7 @@ export class View {
     born: number; anim: number;
   }>();
   private homes = new Map<HelperKind, { obj: THREE.Group; level: number; born: number }>();
-  // banderas que ondean y cristales que giran (se registran al crear cada edificio)
+  // waving flags and spinning crystals (registered when each building is created)
   private padArrow: HTMLElement;
   private flags = new Set<THREE.Object3D>();
   private crystals = new Set<THREE.Object3D>();
@@ -118,7 +119,7 @@ export class View {
   constructor(container: HTMLElement) {
     // --- renderers
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    // en móvil se baja la resolución interna: es lo que más gasta (y calienta)
+    // on mobile the internal resolution is lowered: it's what costs the most (and heats up)
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, MOBILE ? 1.25 : 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = MOBILE ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
@@ -134,10 +135,10 @@ export class View {
     this.padArrow.style.display = 'none';
     container.appendChild(this.padArrow);
 
-    // --- cámara
+    // --- camera
     this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 200);
 
-    // --- escena y luces
+    // --- scene and lights
     this.scene.add(new THREE.HemisphereLight('#dff1ff', '#55703a', 1.4));
     this.sun = new THREE.DirectionalLight('#fff1d6', 2.6);
     this.sun.castShadow = true;
@@ -151,20 +152,20 @@ export class View {
     this.buildWorld();
     this.debug = new DebugDraw(this.scene);
 
-    // --- castillo
+    // --- castle
     this.castle = this.addAnimated(makeCastleK(1));
     this.castle.position.set(BASE.x, 0, BASE.y);
     this.castleHp = label('hpbar big', '<div></div>');
     this.castleHp.position.set(BASE.x, new THREE.Box3().setFromObject(this.castle).max.y + 0.35, BASE.y);
     this.scene.add(this.castleHp);
 
-    // --- jugador
+    // --- player
     this.player = makeKnight();
     this.scene.add(this.player.ch.root);
     this.playerCoinsLabel = label('stack-count');
     this.scene.add(this.playerCoinsLabel);
 
-    // --- monedas (una sola malla instanciada para todas)
+    // --- coins (a single instanced mesh for all of them)
     this.coins = new THREE.InstancedMesh(coinGeo, coinMat, MAX_COINS);
     this.coins.castShadow = true;
     this.coins.frustumCulled = false;
@@ -175,11 +176,11 @@ export class View {
   }
 
   // ------------------------------------------------------------
-  //  Mundo estático: suelo, borde, árboles y rocas
+  //  Static world: ground, edge, trees and rocks
   // ------------------------------------------------------------
   private buildWorld() {
     const R = WORLD.forestRadius;
-    // contorno irregular (para la explanada y el borde del bosque)
+    // irregular outline (for the clearing and the forest edge)
     const blobPts = (radius: number, jitter: number, seed: number, n = 28) => {
       const pts: THREE.Vector2[] = [];
       for (let k = 0; k < n; k++) {
@@ -197,7 +198,7 @@ export class View {
       this.scene.add(m);
     };
 
-    // suelo: color plano enorme (nunca se ve el borde)
+    // ground: huge flat color (its edge is never visible)
     this.scene.background = new THREE.Color('#2f5f2a');
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(WORLD.size, WORLD.size), new THREE.MeshStandardMaterial({ color: '#5c9e4b', roughness: 1 }));
     ground.rotation.x = -Math.PI / 2;
@@ -205,24 +206,24 @@ export class View {
     ground.receiveShadow = true;
     this.scene.add(ground);
 
-    // suelo del bosque más oscuro, con borde irregular nítido
+    // darker forest floor, with a sharp irregular edge
     const half = WORLD.size / 2;
     const forestFloor = new THREE.Shape([new THREE.Vector2(-half, -half), new THREE.Vector2(half, -half), new THREE.Vector2(half, half), new THREE.Vector2(-half, half)]);
     forestFloor.holes.push(new THREE.Path(blobPts(R - 0.4, 0.6, 3.1, 40)));
     flat(new THREE.ShapeGeometry(forestFloor), '#447f38', 0.003);
 
-    // explanada de tierra alrededor de la base
+    // dirt clearing around the base
     const seed = Math.random() * 10, cr = WORLD.clearingRadius;
     flat(new THREE.ShapeGeometry(new THREE.Shape(blobPts(cr + 0.15, 0.35, seed))), '#8f7a4f', 0.004);
     flat(new THREE.ShapeGeometry(new THREE.Shape(blobPts(cr, 0.35, seed))), '#c4ae7c', 0.008);
 
-    // posición aleatoria en un anillo alrededor de la base
+    // random position in a ring around the base
     const ring = (r0: number, r1: number) => {
       const a = Math.random() * Math.PI * 2, r = Math.sqrt(r0 * r0 + Math.random() * (r1 * r1 - r0 * r0));
       return { x: BASE.x + Math.cos(a) * r, z: BASE.y + Math.sin(a) * r };
     };
 
-    // matas de hierba en el claro
+    // grass tufts in the clearing
     const bladeGeo = new THREE.ConeGeometry(0.045, 0.22, 3);
     bladeGeo.translate(0, 0.11, 0);
     const grassColors = ['#4a8a3b', '#6fb556', '#3f7d33', '#7cc25f'].map(c => new THREE.Color(c));
@@ -245,27 +246,27 @@ export class View {
     blades.receiveShadow = true;
     this.scene.add(blades);
 
-    // matrices de colocación (posición, giro aleatorio y escala)
+    // placement matrices (position, random rotation and scale)
     const place = (x: number, z: number, scale: number, tilt = 0) => {
       this.tmpQ.setFromEuler(this.tmpE.set((Math.random() - 0.5) * tilt, Math.random() * Math.PI * 2, (Math.random() - 0.5) * tilt));
       return new THREE.Matrix4().compose(new THREE.Vector3(x, 0, z), this.tmpQ.clone(), new THREE.Vector3(scale, scale, scale));
     };
-    // reparte posiciones entre varios modelos y los añade como mallas instanciadas
+    // spreads positions across several models and adds them as instanced meshes
     const scatter = (names: string[], spots: THREE.Matrix4[], shadows: boolean, skip: string[] = []) => {
       const groups = names.map(() => [] as THREE.Matrix4[]);
       spots.forEach((m, k) => groups[k % names.length].push(m));
       names.forEach((n, k) => { if (groups[k].length) for (const im of instanced(n, groups[k], shadows, skip)) this.scene.add(im); });
     };
 
-    // flores, setas y matorrales por el claro
+    // flowers, mushrooms and bushes around the clearing
     const deco = (n: number, r0: number, r1: number, s0: number, s1: number) =>
       Array.from({ length: n }, () => { const { x, z } = ring(r0, r1); return place(x, z, s0 + Math.random() * (s1 - s0)); });
     scatter(['flower_redA', 'flower_yellowA', 'flower_purpleA'], deco(240, cr + 0.6, R - 0.5, 0.9, 1.3), false);
     scatter(['mushroom_red', 'mushroom_tanGroup'], deco(40, cr + 2, R + 1, 0.9, 1.4), false);
     scatter(['plant_bush', 'plant_bushSmall'], deco(70, cr + 1.5, R + 1.5, 1.2, 2.0), false);
 
-    // bosque denso: rejilla con ruido, con borde irregular
-    const outer = 30, step = 1.2;    // más allá no llega nunca la cámara
+    // dense forest: jittered grid, with an irregular edge
+    const outer = 30, step = 1.2;    // the camera never reaches beyond this
     const edge = (a: number) => R + Math.sin(a * 3 + 3.1) * 0.6 + Math.sin(a * 7 + 6.2) * 0.3;
     const edgeSpots: THREE.Matrix4[] = [], deepSpots: THREE.Matrix4[] = [];
     for (let gx = -outer; gx <= outer; gx += step) for (let gz = -outer; gz <= outer; gz += step) {
@@ -275,14 +276,14 @@ export class View {
       const sc = 1.0 + Math.random() * 0.6 + Math.min(0.5, (r - R) * 0.03);
       (r < R + 3.5 ? edgeSpots : deepSpots).push(place(BASE.x + x, BASE.y + z, sc, 0.12));
     }
-    // borde del bosque: variedad y sombras; dentro, los modelos más sencillos y sin sombras (mucho más barato)
+    // forest edge: variety and shadows; deeper in, the simplest models without shadows (much cheaper)
     scatter(['tree_pineDefaultA', 'tree_pineRoundA', 'tree_default', 'tree_pineDefaultB', 'tree_oak', 'tree_pineRoundB', 'tree_cone'], edgeSpots, !MOBILE);
-    // en el bosque profundo los troncos no se ven: solo copas
+    // in the deep forest trunks aren't visible: canopies only
     scatter(['tree_pineTallA', 'tree_pineTallB', 'tree_pineTallC', 'tree_pineTallD', 'tree_fat'], deepSpots, false, ['woodBark', 'woodBarkDark']);
-    // los árboles sueltos, rocas, tocones y troncos del claro los coloca la simulación (son sólidos): ver syncProps
+    // lone trees, rocks, stumps and logs in the clearing are placed by the simulation (they're solid): see syncProps
   }
 
-  /** Árboles, rocas, tocones y troncos del claro: los dibuja donde la simulación los ha puesto (cambian en cada partida). */
+  /** Trees, rocks, stumps and logs in the clearing: draws them where the simulation put them (they change every game). */
   private syncProps(G: GameState) {
     if (this.propsRef === G.props) return;
     this.propsRef = G.props;
@@ -304,7 +305,7 @@ export class View {
     const w = window.innerWidth, h = window.innerHeight;
     this.renderer.setSize(w, h);
     this.labels.setSize(w, h);
-    // en apaisado se ven ~14 tiles de alto; en vertical se garantiza un ancho mínimo
+    // in landscape ~14 tiles are visible vertically; in portrait a minimum width is guaranteed
     const halfH = Math.max(6.5, 5.2 * h / w);
     const halfW = halfH * w / h;
     this.camera.left = -halfW; this.camera.right = halfW;
@@ -312,13 +313,13 @@ export class View {
     this.camera.updateProjectionMatrix();
   }
 
-  /** Zoom de cámara (1 = normal; menor = más lejos). Menú de desarrollo. */
+  /** Camera zoom (1 = normal; lower = farther). Dev menu. */
   setZoom(z: number) {
     this.camera.zoom = z;
     this.camera.updateProjectionMatrix();
   }
 
-  /** Añade un objeto a la escena y registra sus banderas y cristales para animarlos. */
+  /** Adds an object to the scene and registers its flags and crystals for animation. */
   private addAnimated<T extends THREE.Object3D>(obj: T): T {
     obj.traverse(o => { if (o.name === 'flag') this.flags.add(o); if (o.name === 'crystal') this.crystals.add(o); });
     this.scene.add(obj);
@@ -339,7 +340,7 @@ export class View {
     if (pop) this.castlePop = 0.55;
   }
 
-  /** Reinicia todo lo dinámico (al empezar partida nueva). */
+  /** Resets everything dynamic (when starting a new game). */
   reset(G: GameState) {
     for (const { ch, hp } of this.enemies.values()) { removeLabels(hp); this.scene.remove(ch.root); ch.dispose(); }
     for (const d of this.dying) { this.scene.remove(d.ch.root); d.ch.dispose(); }
@@ -359,7 +360,7 @@ export class View {
   }
 
   // ------------------------------------------------------------
-  //  Eventos de la simulación -> efectos
+  //  Simulation events -> effects
   // ------------------------------------------------------------
   private handle(ev: GameEvent, G: GameState) {
     switch (ev.type) {
@@ -406,8 +407,8 @@ export class View {
     this.updateCamera(G, dt);
     this.debug.update(G);
 
-    // sombras en fotogramas alternos (móvil). Entre medias se reutiliza el mapa anterior con su propia
-    // matriz de luz, así que las sombras de lo quieto no se mueven aunque el sol siga al jugador
+    // shadows on alternate frames (mobile). In between, the previous map is reused with its own
+    // light matrix, so shadows of static things don't move even though the sun follows the player
     const sm = this.renderer.shadowMap;
     sm.autoUpdate = false;
     sm.needsUpdate = this.frameNo++ % this.shadowEvery === 0;
@@ -423,27 +424,27 @@ export class View {
   private syncPlayer(G: GameState, dt: number) {
     const p = G.player, m = this.player, ch = m.ch;
     ch.root.position.set(p.x, 0, p.y);
-    // mira al objetivo mientras ataca, si no hacia donde camina
+    // faces the target while attacking, otherwise where it's walking
     let fx = p.faceX, fy = p.faceY;
     if (p.attackT > 0 && p.target) { fx = p.target.x - p.x; fy = p.target.y - p.y; }
     ch.root.rotation.y = lerpAngle(ch.root.rotation.y, Math.atan2(fx, fy), Math.min(1, dt * 14));
-    // polvo al andar (de tierra en el claro, verdoso en la hierba)
+    // walking dust (dirt-colored in the clearing, greenish on grass)
     this.dustT -= dt;
     if (p.moving && this.dustT <= 0) {
       this.dustT = 0.11;
       const onDirt = Math.hypot(p.x - BASE.x, p.y - BASE.y) < WORLD.clearingRadius;
       this.puffs(p.x - p.faceX * 0.15, p.y - p.faceY * 0.15, 0.05, onDirt ? '#d9c49b' : '#a9c98a', 1, 0.08, 0.45, 0.09);
     }
-    // andar / correr / quieto
+    // walk / run / idle
     if (p.moving) ch.play('Running_A', 1.1); else ch.play('Idle_A');
-    // golpe nuevo: tajo de daga o disparo de ballesta (solo de cintura para arriba)
+    // new attack: dagger slash or crossbow shot (waist up only)
     if (p.attackT > this.lastAttackT + 0.01) {
       if (p.weapon === 'sword') ch.once('slash', 3.4);
       else this.shootT = 0;
     }
     this.lastAttackT = p.attackT;
     ch.update(dt);
-    // ballesta: sube el brazo, aguanta apuntando, retroceso al disparar y lo baja
+    // crossbow: raise the arm, hold aim, recoil on shooting, then lower it
     this.shootT = Math.min(SHOOT_POSE, this.shootT + dt);
     const t = this.shootT / SHOOT_POSE;
     const k = t >= 1 ? 0 : t < 0.15 ? t / 0.15 : t > 0.7 ? (1 - t) / 0.3 : 1;
@@ -459,7 +460,7 @@ export class View {
       if (!v) {
         const em = makeEnemy(e.kind, e.boss);
         const ch = em.ch;
-        // cada uno empieza la animación en un punto distinto (que no anden todos a la vez)
+        // each one starts the animation at a different point (so they don't all walk in sync)
         ch.mixer.setTime(Math.random() * 2);
         const hp = label('hpbar', '<div></div>');
         hp.position.set(0, em.barY + e.fly, 0);
@@ -471,15 +472,15 @@ export class View {
       const ch = v.ch;
       const dx = BASE.x - e.x, dy = BASE.y - e.y;
       const em = v.em;
-      // los que vuelan suben y bajan un poco al batir las alas
+      // flyers bob up and down a little as they flap their wings
       ch.root.position.set(e.x, e.fly ? e.fly + Math.sin(this.time * 6 + e.id) * 0.06 : 0, e.y);
       ch.root.rotation.y = Math.atan2(dx, dy);
-      // el mago, al lanzar la curación, hace su gesto por encima de la animación de andar
+      // when casting a heal, the mage plays its gesture on top of the walk animation
       if (em.cast && e.lunge > 0.5 && v.castT <= 0) { ch.once(em.cast, 1.4); v.castT = 0.6; }
       v.castT -= dt;
       if (e.attacking) ch.play(em.attack, 1 / (e.boss ? 1.5 : 2.0) * 1.6);
       else ch.play(em.walk, e.speed * em.walkRate);
-      // al recibir un golpe: destello blanco; al ser curado por un mago: verde
+      // when hit: white flash; when healed by a mage: green
       const flash = e.hit > 0 ? '#ffffff' : e.healed > 0 ? '#2fae4a' : '';
       if (flash !== v.flash) for (const m of ch.mats) m.emissive.set(flash || '#000000');
       v.flash = flash;
@@ -488,7 +489,7 @@ export class View {
       setWidth(v.hp.element.firstChild as HTMLElement, Math.max(0, e.hp / e.maxHp * 100));
     }
     for (const [id, v] of this.enemies) if (!seen.has(id)) {
-      // muere: animación de caída, luego se hunde en el suelo
+      // dies: falling animation, then sinks into the ground
       removeLabels(v.ch.root);
       v.ch.root.remove(v.hp);
       for (const m of v.ch.mats) m.emissive.set('#000000');
@@ -500,13 +501,13 @@ export class View {
     for (const d of this.dying) {
       d.t += dt;
       d.ch.update(dt);
-      // los que vuelan caen al suelo; luego todos se hunden en la tierra
+      // flyers drop to the ground; then they all sink into the earth
       if (d.y0 > 0) d.ch.root.position.y = Math.max(0, d.y0 - d.t * d.t * 6);
       if (d.t > 0.7) d.ch.root.position.y = -(d.t - 0.7) * 1.2;
     }
     for (const d of this.dying) if (d.t > 1.2) { this.scene.remove(d.ch.root); d.ch.dispose(); }
     this.dying = this.dying.filter(d => d.t <= 1.2);
-    // con muchas muertes a la vez, se quitan los más viejos (rendimiento)
+    // with many deaths at once, the oldest ones are removed (performance)
     while (this.dying.length > 40) { const d = this.dying.shift()!; this.scene.remove(d.ch.root); d.ch.dispose(); }
   }
 
@@ -531,7 +532,7 @@ export class View {
         this.towers.set(b.id, v);
       }
       if (v.level !== b.level) {
-        // al mejorar se cambia el modelo entero por el del nuevo nivel, con un rebote
+        // on upgrade the whole model is swapped for the new level's, with a bounce
         const headRot = v.m.head.rotation.y;
         this.removeAnimated(v.m.root);
         v.m = build(b.level);
@@ -576,7 +577,7 @@ export class View {
       const s = (1 + Math.sin(v.pop * Math.PI * 3) * v.pop * 0.25) * (pad.small ? 0.72 : 1);
       v.m.root.scale.set(s, 1, s);
       v.m.fill.scale.y = Math.max(0.001, pad.paid / pad.cost);
-      // ¿la puedes pagar ya? -> marco dorado que late, y candidata para la flecha
+      // can you afford it now? -> pulsing golden frame, and candidate for the arrow
       const affordable = coins > 0 && coins >= pad.cost - pad.paid;
       const pulse = (Math.sin(this.time * 6) + 1) / 2;
       v.m.frameMat.color.set(affordable ? '#ffd34d' : '#ffffff');
@@ -589,17 +590,17 @@ export class View {
       const el = v.label.element;
       if (el.dataset.aff !== String(affordable)) { el.dataset.aff = String(affordable); el.classList.toggle('affordable', affordable); }
       setText(el.children[1] as HTMLElement, fmt(pad.cost - pad.paid));
-      let name = PAD_INFO[pad.type].label + (pad.level ? ` (Nv ${pad.level + 1})` : '');
+      let name = pad.level ? t('pad.level', { name: t(`pad.${pad.type}`), n: pad.level + 1 }) : t(`pad.${pad.type}`);
       if (pad.type === 'upgrade') {
         const b = G.buildings.find(x => x.id === pad.buildingId);
-        name = b ? `Torre → Nv ${b.level + 1}` : name;
+        name = b ? t('pad.towerTo', { n: b.level + 1 }) : name;
       }
       setText(el.children[2] as HTMLElement, name);
     }
     this.updatePadArrow(nearest);
   }
 
-  /** Flecha en el borde de la pantalla hacia la parcela pagable más cercana, si no se ve. */
+  /** Arrow at the screen edge pointing to the nearest affordable pad, if it's off-screen. */
   private updatePadArrow(target: { x: number; y: number } | null) {
     const a = this.padArrow;
     if (!target) { if (a.style.display !== 'none') a.style.display = 'none'; return; }
@@ -608,7 +609,7 @@ export class View {
     const sx = (p.x + 1) / 2 * w, sy = (1 - p.y) / 2 * h;
     const onScreen = sx > margin && sx < w - margin && sy > margin + 50 && sy < h - margin;
     if (onScreen) { if (a.style.display !== 'none') a.style.display = 'none'; return; }
-    // punto del borde en la dirección del objetivo (desde el centro de la pantalla)
+    // edge point in the direction of the target (from the screen center)
     const cx = w / 2, cy = h / 2, dx = sx - cx, dy = sy - cy;
     const k = Math.min((w / 2 - margin) / Math.abs(dx || 1e-6), (h / 2 - margin - 25) / Math.abs(dy || 1e-6));
     const ax = cx + dx * k, ay = cy + 25 + dy * k;
@@ -631,7 +632,7 @@ export class View {
   }
 
   private syncHelpers(G: GameState, dt: number) {
-    // casetas / cabañas: una por tipo, el modelo cambia con el nivel
+    // kennels / huts: one per kind, the model changes with level
     for (const kind of ['dog', 'peon'] as const) {
       const level = G.helperLevels[kind];
       const first = G.helpers.find(h => h.kind === kind);
@@ -664,7 +665,7 @@ export class View {
       root.rotation.y = lerpAngle(root.rotation.y, Math.atan2(h.faceX, h.faceY), Math.min(1, dt * 12));
 
       if (h.kind === 'dog') {
-        // lobo: dentellada al morder; galopa cuando va a por algo, anda si te sigue
+        // wolf: snap when biting; gallops when going after something, walks when following you
         if (h.attackT > 0 && v.anim <= 0) { ch.once('Attack', 2); v.anim = 0.35; }
         v.anim = Math.max(0, v.anim - dt);
         if (h.mode === 'attack' && !h.moving) ch.play('Idle');
@@ -672,7 +673,7 @@ export class View {
         else ch.play('Idle');
         ch.update(dt);
       } else {
-        // recogiendo de la mesa: gesto de coger; si lleva monedas, anda con los brazos ocupados
+        // collecting from the table: pick-up gesture; if carrying coins, walks with arms full
         const working = h.mode === 'fetch' && !h.moving;
         if (working) ch.play('interact-right', 1.6);
         else if (h.moving) ch.play(h.carry > 0 ? 'holding-both' : 'walk', 1.5);
@@ -689,14 +690,14 @@ export class View {
     this.castleShake = Math.max(0, this.castleShake - dt);
     const s = this.castleShake > 0 ? (Math.random() - 0.5) * 0.08 : 0;
     this.castle.position.set(BASE.x + s, 0, BASE.y - s);
-    // banderas y cristales de todos los edificios
+    // flags and crystals of every building
     for (const f of this.flags) f.rotation.y = Math.sin(this.time * 4 + f.id) * 0.3;
     for (const c of this.crystals) { c.rotation.y = this.time * 1.5; c.position.y += Math.sin(this.time * 2.5) * 0.002; }
     setWidth(this.castleHp.element.firstChild as HTMLElement, G.base.hp / G.base.max * 100);
   }
 
   // ------------------------------------------------------------
-  //  Monedas: suelo, pila del jugador, mesas y voladoras
+  //  Coins: ground, player stack, tables and flying ones
   // ------------------------------------------------------------
   private putCoin(i: number, x: number, y: number, z: number, rx = 0, ry = 0, scale = 1) {
     this.tmpP.set(x, y, z);
@@ -708,40 +709,40 @@ export class View {
   private updateCoins(G: GameState, dt: number) {
     let i = 0;
     const p = G.player;
-    // en el suelo: giran y flotan un poco
+    // on the ground: spin and hover a little
     for (const c of G.drops) {
       if (i >= MAX_COINS) break;
       const hover = c.z > 0 ? c.z : 0.12 + Math.sin(this.time * 5 + c.id) * 0.04;
       this.putCoin(i++, c.x, hover, c.y, Math.PI / 2, this.time * 3 + c.id);
     }
-    // pila en la espalda (se dibujan como mucho 50; el número total va en la etiqueta)
+    // stack on the back (at most 50 are drawn; the total goes in the label)
     const rot = this.player.ch.root.rotation.y;
     const bx = p.x - Math.sin(rot) * 0.3, bz = p.y - Math.cos(rot) * 0.3;
     const n = Math.min(p.coins, 50);
-    const baseY = 0.6;          // a media espalda del pícaro (sobre la capa)
+    const baseY = 0.6;          // mid-back of the rogue (over the cape)
     for (let k = 0; k < n && i < MAX_COINS; k++) {
-      // la pila se balancea más cuanto más alta (inercia al moverse)
+      // the taller the stack, the more it sways (inertia when moving)
       const sway = (p.moving ? 1 : 0.3) * Math.sin(this.time * 6 - k * 0.08) * k * k * 0.00004;
       this.putCoin(i++, bx + p.faceX * -sway, baseY + k * STACK_STEP, bz + p.faceY * -sway, 0, k * 0.4);
     }
     this.playerCoinsLabel.position.set(bx, baseY + n * STACK_STEP + 0.35, bz);
     this.playerCoinsLabel.visible = p.coins > 0;
     setText(this.playerCoinsLabel.element, fmt(p.coins));
-    // monedas que llevan los ayudantes
+    // coins carried by helpers
     for (const h of G.helpers) {
       const v = this.helpers.get(h.id);
       if (!v || h.carry <= 0) continue;
       const rot = v.ch.root.rotation.y;
       const bodyY = 0;
       if (h.kind === 'dog') {
-        // lobo: monedas pequeñas sobre el lomo, para que se le siga viendo
+        // wolf: small coins on its back, so it stays visible
         const sx = h.x - Math.sin(rot) * 0.1, sz = h.y - Math.cos(rot) * 0.1;
         const n = Math.min(h.carry, 25);
         for (let k = 0; k < n && i < MAX_COINS; k++) {
           this.putCoin(i++, sx, 0.38 + k * STACK_STEP * 0.65, sz, 0, k * 0.5, 0.6);
         }
       } else {
-        // peón: pila que sale de la cesta de la espalda
+        // peon: stack sticking out of the basket on its back
         const sx = h.x - Math.sin(rot) * 0.22, sz = h.y - Math.cos(rot) * 0.22;
         const n = Math.min(h.carry, 40);
         for (let k = 0; k < n && i < MAX_COINS; k++) {
@@ -749,7 +750,7 @@ export class View {
         }
       }
     }
-    // mesas: 4 columnas
+    // tables: 4 columns
     for (const b of G.buildings) {
       const m = Math.min(b.table, 48);
       for (let k = 0; k < m && i < MAX_COINS; k++) {
@@ -758,7 +759,7 @@ export class View {
         this.putCoin(i++, b.tx + ox, 0.42 + row * STACK_STEP, b.ty + oz, 0, k);
       }
     }
-    // voladoras (arco parabólico)
+    // flying (parabolic arc)
     const playerTop: Point3 = { x: bx, y: bz, z: baseY + n * STACK_STEP };
     for (const f of this.flyers) {
       f.t += dt;
@@ -791,11 +792,11 @@ export class View {
   }
 
   // ------------------------------------------------------------
-  //  Partículas (geometrías y materiales compartidos: baratas)
+  //  Particles (shared geometries and materials: cheap)
   // ------------------------------------------------------------
   private canSpawn() { return this.fx.length < 260; }
 
-  /** Nubecitas de humo o polvo que crecen, suben y desaparecen. */
+  /** Little puffs of smoke or dust that grow, rise and fade away. */
   private puffs(x: number, y: number, size: number, color: string, n: number, spread: number, life: number, z = 0.12) {
     for (let i = 0; i < n && this.canSpawn(); i++) {
       const p = new THREE.Mesh(PUFF_GEO, mat(color));
@@ -811,13 +812,13 @@ export class View {
     }
   }
 
-  /** Pantalla de título: ángulo de la cámara girando alrededor del castillo (null = cámara normal de juego). */
+  /** Title screen: camera angle orbiting the castle (null = normal game camera). */
   orbit: number | null = null;
 
   private updateCamera(G: GameState, dt: number) {
     if (this.orbit !== null) {
-      // misma altura e inclinación que en el juego, girando alrededor de un punto algo detrás del castillo
-      // (así el castillo queda en la mitad de abajo de la pantalla, por debajo del logo)
+      // same height and tilt as in game, orbiting a point slightly behind the castle
+      // (so the castle sits in the lower half of the screen, below the logo)
       const r = Math.hypot(CAM_OFFSET.x, CAM_OFFSET.z), a = this.orbit;
       const tx = BASE.x - Math.sin(a) * 3, tz = BASE.y - Math.cos(a) * 3;
       this.camTarget.set(tx, 0, tz);
@@ -833,7 +834,7 @@ export class View {
     const tx = this.camTarget.x, tz = this.camTarget.z;
     this.camera.position.set(tx + CAM_OFFSET.x, CAM_OFFSET.y, tz + CAM_OFFSET.z);
     this.camera.lookAt(tx, 0, tz);
-    // el sol sigue al jugador para que el mapa de sombras sea nítido
+    // the sun follows the player so the shadow map stays sharp
     this.sun.position.set(tx - 6, 16, tz + 4);
     this.sun.target.position.set(tx, 0, tz);
   }

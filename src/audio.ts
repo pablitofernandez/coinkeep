@@ -1,32 +1,32 @@
 // ============================================================
-//  Sonido con WebAudio: golpes grabados (Kenney Impact Sounds) más
-//  tonos sintetizados, pasos del caballero y música de fondo.
-//  Escucha los eventos de la simulación y los convierte en efectos.
+//  WebAudio sound: recorded hits (Kenney Impact Sounds) plus
+//  synthesized tones, the knight's footsteps and background music.
+//  Listens to simulation events and turns them into effects.
 // ============================================================
 import { BASE, WORLD } from './config';
 import type { EnemyKind, GameEvent, GameState, SfxName } from './game/types';
 import { Music } from './music';
 
-/** Grupos de muestras en public/sounds (5 variantes de cada uno: nombre_0..4.mp3). */
+/** Sample groups in public/sounds (5 variants of each: name_0..4.mp3). */
 const SAMPLES = [
   'impactPunch_heavy', 'impactSoft_medium',
   'impactWood_heavy', 'impactPlank_medium', 'impactMining', 'impactPlate_heavy',
   'impactBell_heavy', 'footstep_grass', 'footstep_concrete',
 ] as const;
 type Sample = typeof SAMPLES[number];
-const STEP_EVERY = 0.27;         // segundos entre pasos al correr
+const STEP_EVERY = 0.27;         // seconds between footsteps when running
 
 type Wave = OscillatorType;
 
-/** Tiempo mínimo entre dos reproducciones del mismo sonido (evita saturar con 30 torres). */
+/** Minimum time between two plays of the same sound (avoids clipping with 30 towers). */
 const MIN_GAP: Partial<Record<SfxName, number>> = {
   sword: 0.08, bow: 0.08, arrow: 0.07, cannon: 0.12, boom: 0.1, die: 0.05, dieBones: 0.05, dieBat: 0.05, heal: 0.3, bite: 0.1,
   coin: 0.06, pay: 0.07, baseHit: 0.25,
 };
-/** Sonido de muerte de cada tipo de enemigo. */
+/** Death sound for each enemy kind. */
 const DIE_SOUND: Record<EnemyKind, SfxName> = { zombie: 'dieBones', shaman: 'dieBones', runner: 'dieBones', bat: 'dieBat' };
-const MAX_VOICES = 14;           // sonidos simultáneos como mucho
-const HEAR_RANGE = 14;           // a partir de esta distancia al jugador no se oye
+const MAX_VOICES = 14;           // max simultaneous sounds
+const HEAR_RANGE = 14;           // beyond this distance from the player it can't be heard
 
 const STORAGE_KEY = 'sg-muted';
 
@@ -41,17 +41,17 @@ export class Sound {
   readonly music = new Music();
   private last = new Map<SfxName, number>();
   private voices = 0;
-  private coinPitch = 0;          // las monedas seguidas suben de tono
+  private coinPitch = 0;          // consecutive coins rise in pitch
   private coinPitchT = 0;
   muted = false;
   onMuteChange: (muted: boolean) => void = () => {};
 
   constructor() {
-    try { this.muted = localStorage.getItem(STORAGE_KEY) === '1'; } catch { /* sin almacenamiento */ }
-    // Los navegadores solo dejan arrancar el audio tras una interacción del usuario.
+    try { this.muted = localStorage.getItem(STORAGE_KEY) === '1'; } catch { /* no storage */ }
+    // Browsers only allow audio to start after a user interaction.
     const unlock = () => { this.init(); if (this.ctx?.state === 'suspended') this.ctx.resume(); };
     for (const ev of ['pointerdown', 'keydown', 'touchstart']) window.addEventListener(ev, unlock, { passive: true });
-    // en segundo plano, se suspende (ahorra batería en el móvil)
+    // suspended in the background (saves battery on mobile)
     document.addEventListener('visibilitychange', () => {
       if (!this.ctx) return;
       if (document.hidden) this.ctx.suspend(); else this.ctx.resume();
@@ -64,11 +64,11 @@ export class Sound {
     if (!AC) return;
     const ctx = new AC();
     this.ctx = ctx;
-    // compresor final: evita que muchos sonidos juntos saturen
+    // final compressor: keeps many sounds at once from clipping
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -14; comp.ratio.value = 6;
     comp.connect(ctx.destination);
-    // out: volumen general (silencio con M); master: solo los efectos (la música va directa a out)
+    // out: overall volume (mute with M); master: effects only (music goes straight to out)
     this.out = ctx.createGain();
     this.out.gain.value = this.muted ? 0 : 0.5;
     this.out.connect(comp);
@@ -85,18 +85,18 @@ export class Sound {
 
   toggleMute() {
     this.muted = !this.muted;
-    try { localStorage.setItem(STORAGE_KEY, this.muted ? '1' : '0'); } catch { /* nada */ }
+    try { localStorage.setItem(STORAGE_KEY, this.muted ? '1' : '0'); } catch { /* nothing */ }
     if (this.ctx) this.out.gain.setTargetAtTime(this.muted ? 0 : 0.5, this.ctx.currentTime, 0.05);
     this.onMuteChange(this.muted);
   }
 
-  /** Volumen de los efectos (0..1), aparte de la música. */
+  /** Effects volume (0..1), separate from the music. */
   setSfxVolume(v: number) {
     this.sfxVolume = v;
     if (this.ctx) this.master.gain.setTargetAtTime(v, this.ctx.currentTime, 0.05);
   }
 
-  /** Reproduce un efecto suelto a todo volumen (botonera del menú de desarrollo). */
+  /** Play a single effect at full volume (sound board in the developer menu). */
   test(name: SfxName) {
     this.init();
     if (this.ctx?.state === 'suspended') this.ctx.resume();
@@ -105,7 +105,7 @@ export class Sound {
     this.play(name, 1);
   }
 
-  /** Descarga y decodifica las muestras; mientras no estén, se usan los tonos sintetizados. */
+  /** Download and decode the samples; until they're ready, synthesized tones are used. */
   private loadSamples() {
     const ctx = this.ctx!;
     for (const name of SAMPLES) {
@@ -113,11 +113,11 @@ export class Sound {
         fetch(`${import.meta.env.BASE_URL}sounds/${name}_${i}.mp3`)
           .then(r => r.arrayBuffer())
           .then(b => new Promise<AudioBuffer>((ok, ko) => ctx.decodeAudioData(b, ok, ko))),
-      )).then(list => this.buffers.set(name, list)).catch(() => { /* sin muestra: se sintetiza */ });
+      )).then(list => this.buffers.set(name, list)).catch(() => { /* no sample: synthesize it */ });
     }
   }
 
-  /** Procesa los eventos de un frame (se llama antes de que la vista los vacíe). */
+  /** Process a frame's events (called before the view clears them). */
   handle(G: GameState, events: GameEvent[]) {
     if (!this.ctx || this.muted || this.ctx.state !== 'running') return;
     this.footsteps(G);
@@ -133,7 +133,7 @@ export class Sound {
     }
   }
 
-  /** Pasos del caballero: tierra en la explanada, hierba fuera. */
+  /** The knight's footsteps: dirt in the clearing, grass outside. */
   private footsteps(G: GameState) {
     const now = this.ctx!.currentTime;
     if (!G.player.moving || G.over) { this.stepT = now; return; }
@@ -143,7 +143,7 @@ export class Sound {
     this.sample(onDirt ? 'footstep_concrete' : 'footstep_grass', onDirt ? 0.16 : 0.22, 0.95 + Math.random() * 0.1);
   }
 
-  /** Reproduce una variante al azar de una muestra. Devuelve false si aún no está cargada. */
+  /** Play a random variant of a sample. Returns false if it isn't loaded yet. */
   private sample(name: Sample, vol: number, rate = 1, t = this.ctx!.currentTime) {
     const list = this.buffers.get(name);
     if (!list || this.voices >= MAX_VOICES) return false;
@@ -171,11 +171,11 @@ export class Sound {
     const gap = MIN_GAP[name] ?? 0;
     if (now - (this.last.get(name) ?? -1) < gap) return;
     this.last.set(name, now);
-    const r = 0.94 + Math.random() * 0.12;   // ligera variación para que no suene repetitivo
+    const r = 0.94 + Math.random() * 0.12;   // slight variation so it doesn't sound repetitive
 
     switch (name) {
       case 'sword':
-        // tajo: silbido de la hoja cortando el aire + golpe sordo y carnoso al impactar
+        // slash: whoosh of the blade cutting the air + dull, meaty thud on impact
         this.swish(now, 0.13, 0.22 * vol, r);
         if (!this.sample('impactPunch_heavy', 0.3 * vol, 1.25 * r, now + 0.06)) this.noiseHit(now + 0.06, 0.08, 500, 'lowpass', 0.2 * vol);
         break;
@@ -187,25 +187,25 @@ export class Sound {
         this.sample('impactWood_heavy', 0.45 * vol, 0.7 * r);
         break;
       case 'die':
-        // gruñido ronco del zombi que se apaga + el cuerpo cayendo al suelo
+        // the zombie's hoarse groan fading out + the body hitting the ground
         this.groan(now, 0.32 * r, 0.11 * vol, 150 * r);
         if (!this.sample('impactSoft_medium', 0.45 * vol, 0.7 * r, now + 0.22)) this.noiseHit(now + 0.22, 0.12, 300, 'lowpass', 0.25 * vol);
         break;
       case 'dieBones':
-        // esqueleto: huesos que se desmoronan (tablones agudos encadenados)
+        // skeleton: bones crumbling (chained high-pitched planks)
         for (let i = 0; i < 3; i++) {
           const t = now + i * 0.06 + Math.random() * 0.02;
           if (!this.sample('impactPlank_medium', (0.32 - i * 0.07) * vol, (1.9 + i * 0.25) * r, t)) this.noiseHit(t, 0.04, 2500, 'bandpass', 0.12 * vol, 4);
         }
         break;
       case 'dieBat':
-        // murciélago: chillido agudo que cae + golpecito al caer
+        // bat: falling high-pitched squeak + small thud as it drops
         this.tone(now, 'sine', 2600 * r, 1300 * r, 0.12, 0.07 * vol);
         this.tone(now + 0.05, 'triangle', 2100 * r, 900 * r, 0.1, 0.05 * vol);
         if (!this.sample('impactSoft_medium', 0.3 * vol, 1.5 * r, now + 0.18)) this.noiseHit(now + 0.18, 0.06, 900, 'lowpass', 0.12 * vol);
         break;
       case 'heal':
-        // hechizo de curación del mago: brillo suave ascendente
+        // the mage's healing spell: soft rising shimmer
         this.arp(now, [880 * r, 1109 * r, 1319 * r, 1760 * r], 0.05, 'sine', 0.06 * vol);
         break;
       case 'bossDie':
@@ -217,7 +217,7 @@ export class Sound {
         if (!this.sample('impactSoft_medium', 0.6 * vol, 1.3 * r)) { this.noiseHit(now, 0.05, 1800 * r, 'bandpass', 0.18 * vol, 5); this.tone(now, 'square', 300 * r, 200, 0.04, 0.05 * vol); }
         break;
       case 'coin': {
-        // las monedas encadenadas suben de tono, como un "ding ding ding"
+        // chained coins rise in pitch, like a "ding ding ding"
         if (now - this.coinPitchT > 0.4) this.coinPitch = 0;
         this.coinPitchT = now;
         const f = 1300 * Math.pow(2, Math.min(this.coinPitch, 12) / 24);
@@ -228,7 +228,7 @@ export class Sound {
       }
       case 'pay': this.tone(now, 'triangle', 700 * r, 900 * r, 0.05, 0.08 * vol); break;
       case 'build':
-        // tablones y martillazo
+        // planks and a hammer blow
         this.sample('impactPlank_medium', 0.6, 1);
         this.sample('impactWood_heavy', 0.5, 1.05, now + 0.14);
         this.arp(now + 0.1, [392, 523, 659, 784], 0.07, 'triangle', 0.12);
@@ -241,7 +241,7 @@ export class Sound {
         if (!this.sample('impactPlate_heavy', 0.6 * vol, 0.8 * r)) { this.tone(now, 'sine', 90, 60, 0.2, 0.4 * vol); this.noiseHit(now, 0.12, 300, 'lowpass', 0.3 * vol); }
         break;
       case 'wave':
-        // tambores de guerra + cuerno grave de dos notas (larga y luego una quinta arriba)
+        // war drums + deep two-note horn (a long one, then a fifth higher)
         this.warDrum(now, 0.5); this.warDrum(now + 0.28, 0.35); this.warDrum(now + 0.56, 0.55);
         this.warHorn(now + 0.1, 110, 0.9, 0.16);
         this.warHorn(now + 1.0, 165, 0.75, 0.13);
@@ -257,14 +257,14 @@ export class Sound {
   }
 
   // ------------------------------------------------------------
-  //  Piezas básicas de síntesis
+  //  Basic synthesis building blocks
   // ------------------------------------------------------------
   private voice(dur: number) {
     this.voices++;
     setTimeout(() => this.voices--, dur * 1000 + 50);
   }
 
-  /** Tono con barrido de frecuencia y envolvente rápida. */
+  /** Tone with a frequency sweep and a fast envelope. */
   private tone(t: number, type: Wave, f0: number, f1: number, dur: number, vol: number) {
     const ctx = this.ctx!;
     const o = ctx.createOscillator(), g = ctx.createGain();
@@ -279,7 +279,7 @@ export class Sound {
     this.voice(dur);
   }
 
-  /** Golpe de ruido filtrado (impactos, explosiones, silbidos). */
+  /** Filtered noise burst (impacts, explosions, whooshes). */
   private noiseHit(t: number, dur: number, freq: number, filter: BiquadFilterType, vol: number, q = 1) {
     const ctx = this.ctx!;
     const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
@@ -292,12 +292,12 @@ export class Sound {
     this.voice(dur);
   }
 
-  /** Arpegio de notas cortas. */
+  /** Arpeggio of short notes. */
   private arp(t: number, notes: number[], step: number, type: Wave, vol: number) {
     notes.forEach((f, i) => this.tone(t + i * step, type, f, f, step * 2.2, vol));
   }
 
-  /** Silbido de una hoja: ruido en banda que sube de tono muy deprisa. */
+  /** Blade whoosh: band-passed noise that rises in pitch very quickly. */
   private swish(t: number, dur: number, vol: number, r: number) {
     const ctx = this.ctx!;
     const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
@@ -313,7 +313,7 @@ export class Sound {
     this.voice(dur);
   }
 
-  /** Gruñido gutural: diente de sierra grave que cae, filtrado como una garganta. */
+  /** Guttural groan: a falling low sawtooth, filtered like a throat. */
   private groan(t: number, dur: number, vol: number, f0: number) {
     const ctx = this.ctx!;
     const o = ctx.createOscillator(), g = ctx.createGain();
@@ -321,7 +321,7 @@ export class Sound {
     o.type = 'sawtooth';
     o.frequency.setValueAtTime(f0, t);
     o.frequency.exponentialRampToValueAtTime(f0 * 0.55, t + dur);
-    // dos "formantes" de vocal oscura (una «o» ronca) que se cierran al final
+    // two dark-vowel "formants" (a hoarse "o") that close at the end
     f1.type = 'bandpass'; f1.Q.value = 4; f1.frequency.setValueAtTime(550, t); f1.frequency.linearRampToValueAtTime(380, t + dur);
     f2.type = 'lowpass'; f2.frequency.value = 1100;
     g.gain.setValueAtTime(0.0001, t);
@@ -332,19 +332,19 @@ export class Sound {
     this.voice(dur);
   }
 
-  /** Tambor de guerra grave (tipo timbal de piel). */
+  /** Deep war drum (like a skin kettledrum). */
   private warDrum(t: number, vol: number) {
     this.tone(t, 'sine', 95, 48, 0.45, vol);
     this.noiseHit(t, 0.12, 350, 'lowpass', vol * 0.5);
   }
 
-  /** Cuerno de guerra de verdad: varias sierras desafinadas, entrada lenta, formante de metal y vibrato. */
+  /** A proper war horn: several detuned saws, slow attack, brassy formant and vibrato. */
   private warHorn(t: number, f: number, dur: number, vol: number) {
     const ctx = this.ctx!;
     const g = ctx.createGain(), bp = ctx.createBiquadFilter(), lp = ctx.createBiquadFilter();
     bp.type = 'peaking'; bp.frequency.value = 650; bp.Q.value = 1.2; bp.gain.value = 8;
     lp.type = 'lowpass';
-    // el timbre se abre al soplar y se cierra al final, como un cuerno real
+    // the timbre opens up when blown and closes at the end, like a real horn
     lp.frequency.setValueAtTime(350, t);
     lp.frequency.linearRampToValueAtTime(1500, t + 0.25);
     lp.frequency.setValueAtTime(1500, t + dur * 0.75);
@@ -360,7 +360,7 @@ export class Sound {
       const o = ctx.createOscillator();
       o.type = 'sawtooth';
       o.detune.value = det;
-      o.frequency.setValueAtTime(f * 0.94, t);           // entra un poco bajo y sube (el labio)
+      o.frequency.setValueAtTime(f * 0.94, t);           // starts a bit flat and rises (the lip)
       o.frequency.exponentialRampToValueAtTime(f, t + 0.12);
       lg.connect(o.frequency);
       o.connect(bp);
@@ -371,7 +371,7 @@ export class Sound {
     this.voice(dur);
   }
 
-  /** Cuerno sencillo (llegada del jefe). */
+  /** Simple horn (boss arrival). */
   private horn(t: number, notes: number[], dur: number) {
     const ctx = this.ctx!;
     for (const f of notes) {

@@ -1,16 +1,16 @@
 // ============================================================
-//  Entrada: teclado (flechas/WASD) + joystick virtual táctil/ratón.
-//  Devuelve la dirección en coordenadas de PANTALLA (x derecha, y abajo).
+//  Input: keyboard (arrows/WASD) + virtual touch/mouse joystick.
+//  Returns the direction in SCREEN coordinates (x right, y down).
 // ============================================================
 const JOY_RADIUS = 50;
 
 /**
- * Impide que el navegador del móvil haga zoom en la página. Safari en iPhone ignora `user-scalable=no`
- * del viewport (desde iOS 10), así que hay que cortar los gestos a mano:
- *  - pellizco: eventos `gesture*` (solo Safari) y cualquier movimiento con dos o más dedos;
- *  - doble toque: si un toque termina muy poco después del anterior, se anula su acción por defecto.
- * Los botones y casillas no se tocan (perderían el segundo clic); llevan `touch-action: manipulation` en el CSS,
- * que ya les quita el zoom por doble toque.
+ * Stop the mobile browser from zooming the page. Safari on iPhone ignores the viewport's `user-scalable=no`
+ * (since iOS 10), so the gestures have to be blocked by hand:
+ *  - pinch: `gesture*` events (Safari only) and any movement with two or more fingers;
+ *  - double tap: if a tap ends very shortly after the previous one, its default action is cancelled.
+ * Buttons and inputs are left alone (they'd lose the second click); they have `touch-action: manipulation` in the CSS,
+ * which already removes double-tap zoom for them.
  */
 export function preventBrowserZoom() {
   const stop = (e: Event) => e.preventDefault();
@@ -26,7 +26,7 @@ export function preventBrowserZoom() {
   }, { passive: false });
 }
 
-/** ¿La tecla va a una casilla de texto? (entonces no es para el juego) */
+/** Is the key going to a text field? (then it's not for the game) */
 export const isTyping = (e: KeyboardEvent) => {
   const t = e.target as HTMLElement | null;
   return !!t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA');
@@ -35,12 +35,12 @@ export const isTyping = (e: KeyboardEvent) => {
 export class Input {
   private keys: Record<string, boolean> = {};
   private joy = { active: false, id: -1, ox: 0, oy: 0, dx: 0, dy: 0 };
-  /** Se llama con cualquier pulsación/toque (para reiniciar tras game over). */
+  /** Called on any key press/tap (to restart after game over). */
   onAny: () => void = () => {};
 
   constructor(surface: HTMLElement, private joyEl: HTMLElement, private knobEl: HTMLElement) {
     window.addEventListener('keydown', e => {
-      if (isTyping(e)) return;   // escribiendo en una casilla del menú de desarrollo
+      if (isTyping(e)) return;   // typing in a developer menu field
       this.keys[e.key.toLowerCase()] = true;
       if (e.key.startsWith('Arrow')) e.preventDefault();
       this.onAny();
@@ -60,7 +60,7 @@ export class Input {
       if (!j.active || e.pointerId !== j.id) return;
       let dx = e.clientX - j.ox, dy = e.clientY - j.oy;
       const d = Math.hypot(dx, dy);
-      // el joystick "persigue" al dedo si se sale del radio
+      // the joystick "chases" the finger if it leaves the radius
       if (d > JOY_RADIUS) {
         j.ox += dx * (1 - JOY_RADIUS / d); j.oy += dy * (1 - JOY_RADIUS / d);
         dx = e.clientX - j.ox; dy = e.clientY - j.oy;
@@ -84,7 +84,7 @@ export class Input {
     this.knobEl.style.transform = `translate(${j.dx * JOY_RADIUS}px, ${j.dy * JOY_RADIUS}px)`;
   }
 
-  /** Dirección en pantalla, magnitud 0..1 */
+  /** Screen direction, magnitude 0..1 */
   screenDir(): { x: number; y: number } {
     const k = this.keys;
     let x = 0, y = 0;

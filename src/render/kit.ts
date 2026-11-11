@@ -1,29 +1,29 @@
 // ============================================================
-//  Montaje de modelos Kenney: personajes, torres por piezas,
-//  castillo, cabaña del peón y proyectiles.
+//  Kenney model assembly: characters, piece-stacked towers,
+//  castle, peon hut and projectiles.
 // ============================================================
 import * as THREE from 'three';
 import type { EnemyKind } from '../game/types';
 import { Character, bake, model } from './assets';
 
 // ------------------------------------------------------------
-//  Personajes
+//  Characters
 // ------------------------------------------------------------
-export const PLAYER_SCALE = 0.46;     // el pícaro de KayKit es mucho más grande que los Mini Characters
+export const PLAYER_SCALE = 0.46;     // the KayKit rogue is much bigger than the Mini Characters
 export const PEON_SCALE = 1.25;
 
 export interface KnightModel { ch: Character; sword: THREE.Object3D; bow: THREE.Object3D }
 
 /**
- * Huesos de cintura para arriba del esqueleto Rig_Medium de KayKit (los ataques solo mueven estos).
- * Ojo: Three.js quita los puntos de los nombres al cargar («hand.r» pasa a ser «handr»).
+ * Waist-up bones of the KayKit Rig_Medium skeleton (attacks only move these).
+ * Note: Three.js strips the dots from names on load ("hand.r" becomes "handr").
  */
 const UPPER_BODY = ['spine', 'chest', 'head', 'upperarml', 'lowerarml', 'wristl', 'handl', 'handslotl',
   'upperarmr', 'lowerarmr', 'wristr', 'handr', 'handslotr'];
 
 /**
- * Jugador: el pícaro de KayKit Adventurers, con daga en la mano derecha y ballesta en la izquierda.
- * Las armas van en los huesos «handslot», que KayKit prepara justo para eso.
+ * Player: the KayKit Adventurers rogue, with a dagger in the right hand and a crossbow in the left.
+ * Weapons go on the "handslot" bones, which KayKit provides just for that.
  */
 export function makeKnight(): KnightModel {
   const ch = new Character('Rogue', PLAYER_SCALE, false, ['Rig_Medium_General', 'Rig_Medium_MovementBasic']);
@@ -31,7 +31,7 @@ export function makeKnight(): KnightModel {
   const bow = model('crossbow_1handed');
   ch.bone('handslotr')?.add(sword);
   ch.bone('handslotl')?.add(bow);
-  // tajo solo de cintura para arriba: así puede atacar sin dejar de correr
+  // waist-up slash only: that way it can attack while running
   ch.upperBody('Throw', 'slash', UPPER_BODY);
   ch.play('Idle_A');
   return { ch, sword, bow };
@@ -41,13 +41,13 @@ const _q = new THREE.Quaternion(), _pq = new THREE.Quaternion(), _dir = new THRE
 const _Y = new THREE.Vector3(0, 1, 0);
 
 /**
- * Ballesta (el pack gratuito no trae animación de disparo). Llamar en cada fotograma, después de ch.update().
- * - Siempre: la ballesta apunta hacia delante, con los brazos del arco en horizontal, esté donde esté la mano.
- * - Al disparar (`k` de 0 a 1): además estira el brazo izquierdo hacia delante, con un pequeño retroceso.
+ * Crossbow (the free pack has no shooting animation). Call every frame, after ch.update().
+ * - Always: the crossbow points forward, with the bow limbs horizontal, wherever the hand is.
+ * - When shooting (`k` from 0 to 1): also stretches the left arm forward, with a small recoil.
  */
 export function aimCrossbow(m: KnightModel, k: number, recoil: number) {
   if (k > 0) aimArm(m, k, recoil);
-  // la ballesta, recta hacia delante (su +z es la punta); la punta sube un poco con el retroceso
+  // the crossbow, straight ahead (its +z is the tip); the tip rises a bit with the recoil
   const slot = m.bow.parent;
   if (!slot?.parent) return;
   m.ch.root.updateMatrixWorld(true);
@@ -61,35 +61,35 @@ function aimArm(m: KnightModel, k: number, recoil: number) {
   const upper = m.ch.bone('upperarml'), lower = m.ch.bone('lowerarml'), wrist = m.ch.bone('wristl');
   if (!upper || !lower || !upper.parent) return;
   m.ch.root.updateMatrixWorld(true);
-  // dirección deseada del brazo en el mundo: hacia delante del personaje, algo hacia arriba y hacia el centro
+  // desired arm direction in world space: in front of the character, slightly up and towards the center
   _dir.set(-0.15, 0.12 + recoil * 0.25, 1).normalize();
   _dir.applyQuaternion(m.ch.root.getWorldQuaternion(_q));
-  // el hueso apunta por su eje Y local: giro de Y a esa dirección, pasado al espacio del padre
+  // the bone points along its local Y axis: rotation from Y to that direction, moved to parent space
   _q.setFromUnitVectors(_Y, _dir);
   upper.parent.getWorldQuaternion(_pq);
   _q.premultiply(_pq.invert());
   upper.quaternion.slerp(_q, k);
-  // antebrazo y muñeca rectos
+  // forearm and wrist straight
   _q.identity();
   lower.quaternion.slerp(_q, k);
   wrist?.quaternion.slerp(_q, k);
 }
 const _tilt = new THREE.Quaternion(), _X = new THREE.Vector3(1, 0, 0);
 
-/** Modelo de un enemigo y los nombres de sus animaciones (cada pack las llama a su manera). */
+/** An enemy's model and its animation names (each pack names them its own way). */
 export interface EnemyModel {
   ch: Character;
-  walk: string; walkRate: number;   // ritmo de la animación de andar por unidad de velocidad
+  walk: string; walkRate: number;   // walk animation rate per unit of speed
   attack: string; die: string; cast?: string;
-  barY: number;                     // altura de la barra de vida (sobre el suelo, incluido el vuelo)
+  barY: number;                     // health bar height (above the ground, flight included)
 }
-export const SKELETON_SCALE = 0.44;   // KayKit Skeletons (mismo tamaño de modelo que el pícaro)
+export const SKELETON_SCALE = 0.44;   // KayKit Skeletons (same model size as the rogue)
 export const MINION_SCALE = 0.4;
 export const BOSS_SCALE = 0.8;
 export const BAT_SCALE = 0.0016;
 const RIG = ['Rig_Medium_General', 'Rig_Medium_MovementBasic'];
 
-/** Esqueleto de KayKit con sus armas en las manos (materiales propios, para el destello al golpearlo). */
+/** KayKit skeleton with its weapons in hand (own materials, for the hit flash). */
 function skeleton(name: string, scale: number, right?: string, left?: string): Character {
   const ch = new Character(name, scale, true, RIG);
   for (const [slot, weapon] of [['handslotr', right], ['handslotl', left]] as const) {
@@ -109,18 +109,18 @@ function skeleton(name: string, scale: number, right?: string, left?: string): C
 export function makeEnemy(kind: EnemyKind, boss: boolean): EnemyModel {
   let m: EnemyModel;
   if (boss || kind === 'zombie') {
-    // guerrero esqueleto con espada y escudo; el jefe es el mismo, solo que enorme
+    // skeleton warrior with sword and shield; the boss is the same, only huge
     const ch = skeleton('Skeleton_Warrior', boss ? BOSS_SCALE : SKELETON_SCALE, 'Skeleton_Blade', 'Skeleton_Shield_Small_A');
     m = { ch, walk: 'Walking_A', walkRate: boss ? 1.0 : 1.15, attack: 'Throw', die: 'Death_A', barY: boss ? 2.3 : 1.3 };
   } else if (kind === 'runner') {
-    // esbirro con hacha, corriendo
+    // minion with an axe, running
     const ch = skeleton('Skeleton_Minion', MINION_SCALE, 'Skeleton_Axe');
     m = { ch, walk: 'Running_A', walkRate: 0.45, attack: 'Throw', die: 'Death_B', barY: 1.2 };
   } else if (kind === 'bat') {
     const ch = new Character('bat', BAT_SCALE, true);
     m = { ch, walk: 'BatArmature|Bat_Flying', walkRate: 0.9, attack: 'BatArmature|Bat_Attack', die: 'BatArmature|Bat_Death', barY: 0.75 };
   } else {
-    // mago esqueleto: báculo en la mano derecha; «Use_Item» como gesto del hechizo
+    // skeleton mage: staff in the right hand; "Use_Item" as the spell gesture
     const ch = skeleton('Skeleton_Mage', SKELETON_SCALE, 'Skeleton_Staff');
     m = { ch, walk: 'Walking_B', walkRate: 1.1, attack: 'Interact', die: 'Death_A', cast: 'Use_Item', barY: 1.4 };
   }
@@ -128,7 +128,7 @@ export function makeEnemy(kind: EnemyKind, boss: boolean): EnemyModel {
   return m;
 }
 
-/** Lobo (Quaternius, Ultimate Animated Animals): sustituye al perro. */
+/** Wolf (Quaternius, Ultimate Animated Animals): replaces the dog. */
 export const WOLF_SCALE = 0.19;
 export function makeDogK(): Character {
   const ch = new Character('wolf', WOLF_SCALE);
@@ -144,18 +144,18 @@ export function makeWorker(): Character {
 }
 
 // ------------------------------------------------------------
-//  Torres (Tower Defense Kit): se apilan piezas según el nivel
+//  Towers (Tower Defense Kit): pieces are stacked according to level
 // ------------------------------------------------------------
 export interface TowerModel { root: THREE.Group; head: THREE.Group }
 
 const TOWER_SCALE = 0.95;
-// piezas de en medio por nivel (1..7) y variante de las piezas (a, b, c)
+// middle pieces per level (1..7) and piece variant (a, b, c)
 const MIDDLES = [0, 1, 1, 2, 2, 2, 2];
 const variant = (level: number) => (level >= 5 ? 'c' : level >= 3 ? 'b' : 'a');
 
 function stack(root: THREE.Group, shape: 'round' | 'square', level: number): number {
   const v = variant(level);
-  const h = shape === 'round' ? 0.6 : 0.5;   // alto de cada pieza
+  const h = shape === 'round' ? 0.6 : 0.5;   // height of each piece
   let y = 0;
   const put = (name: string, height: number) => {
     const p = model(name);
@@ -171,20 +171,20 @@ function stack(root: THREE.Group, shape: 'round' | 'square', level: number): num
 export function makeTower(type: 'archer' | 'cannon', level: number): TowerModel {
   const L = Math.max(1, Math.min(7, level));
   const inner = new THREE.Group();
-  const stat = new THREE.Group();          // piezas fijas: se funden en una sola malla
+  const stat = new THREE.Group();          // static pieces: merged into a single mesh
   const shape = type === 'archer' ? 'round' : 'square';
   const y = stack(stat, shape, L);
   const top = model(`tower-${shape}-top-${variant(L)}`);
   top.position.y = y;
   stat.add(top);
-  // anillo de cristales a media altura desde nivel 5
+  // ring of crystals at mid height from level 5
   if (L >= 5) {
     const c = model('tower-round-crystals');
     c.position.y = Math.max(0.35, y - 0.3);
     c.scale.setScalar(L >= 7 ? 1.15 : 1);
     stat.add(c);
   }
-  // cristales en lo alto en los niveles máximos
+  // crystals on top at the highest levels
   if (L >= 6) {
     for (const [x, z] of [[-1, -1], [1, 1]]) {
       const c = model(L >= 7 ? 'detail-crystal-large' : 'detail-crystal');
@@ -195,7 +195,7 @@ export function makeTower(type: 'archer' | 'cannon', level: number): TowerModel 
     }
   }
   inner.add(bake(stat, `tower-${type}-${L}`));
-  // arma: gira hacia el objetivo
+  // weapon: turns towards the target
   const head = new THREE.Group();
   head.position.y = y + (shape === 'round' ? 0.18 : 0.5);
   const w = model(type === 'archer' ? 'weapon-ballista' : 'weapon-cannon');
@@ -206,14 +206,14 @@ export function makeTower(type: 'archer' | 'cannon', level: number): TowerModel 
   inner.scale.setScalar(TOWER_SCALE);
   const root = new THREE.Group();
   root.add(inner);
-  // la cabeza se mueve en coordenadas del grupo interior; se expone tal cual
+  // the head moves in the inner group's coordinates; exposed as is
   return { root, head };
 }
 
 // ------------------------------------------------------------
-//  Castillo (Castle Kit). Nivel 1..5 (sube con "Reparar base")
+//  Castle (Castle Kit). Level 1..5 (goes up with "Repair base")
 // ------------------------------------------------------------
-/** Las piezas de muro de Fantasy Town ocupan el borde +x de una baldosa de 1×1 (cabaña). */
+/** Fantasy Town wall pieces occupy the +x edge of a 1×1 tile (hut). */
 function wallAt(g: THREE.Group, name: string, tx: number, tz: number, side: '+x' | '-x' | '+z' | '-z', y: number) {
   const w = model(name);
   w.position.set(tx, y, tz);
@@ -231,14 +231,14 @@ function piece(g: THREE.Group, name: string, x: number, y: number, z: number, ro
   return p;
 }
 
-const CASTLE_SCALE = 0.72;   // 1,5 unidades del kit = medio lado de la base (BASE_HALF)
+const CASTLE_SCALE = 0.72;   // 1.5 kit units = half side of the base (BASE_HALF)
 const CASTLE_EDGE = 1.5;
 
 export function makeCastleK(level: number): THREE.Group {
   const L = Math.max(1, Math.min(5, level));
   const g = new THREE.Group();
 
-  // --- torre del homenaje (centro): crece en pisos y tejado con el nivel
+  // --- keep (center): grows in floors and roof with level
   const keep = new THREE.Group();
   let y = 0;
   const put = (name: string, h: number) => { piece(keep, name, 0, y, 0); y += h; };
@@ -254,7 +254,7 @@ export function makeCastleK(level: number): THREE.Group {
   keep.scale.setScalar(1.3);
   g.add(keep);
 
-  // --- murallas: empalizada de madera al principio, piedra desde nivel 2
+  // --- walls: wooden palisade at first, stone from level 2
   const wall = L >= 2 ? 'wall' : 'wall-narrow-wood';
   for (const side of [0, 1, 2, 3]) {
     const rot = side * Math.PI / 2;
@@ -262,16 +262,16 @@ export function makeCastleK(level: number): THREE.Group {
       const front = side === 0;
       const x = Math.sin(rot) * CASTLE_EDGE + Math.cos(rot) * t;
       const z = Math.cos(rot) * CASTLE_EDGE - Math.sin(rot) * t;
-      // las piezas de muro del kit van a lo largo del eje z: se giran 90° para ir a lo largo del borde
+      // the kit's wall pieces run along the z axis: rotate them 90° to run along the edge
       piece(g, front && L >= 2 ? (t < 0 ? 'wall-doorway' : wall) : wall, x, 0, z, rot + Math.PI / 2);
     }
   }
-  // puerta principal (mirando a la cámara)
+  // main gate (facing the camera)
   if (L >= 2) piece(g, 'gate', 0, 0, CASTLE_EDGE + 0.12, Math.PI / 2);
-  // estandartes en la muralla
+  // banners on the wall
   if (L >= 3) for (const x of [-0.8, 0.8]) piece(g, 'flag-banner-short', x, 0.35, CASTLE_EDGE + 0.32, -Math.PI / 2, 0.9);
 
-  // --- torreones de las esquinas
+  // --- corner turrets
   for (const [cx, cz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
     const t = new THREE.Group();
     let ty = 0;
@@ -290,7 +290,7 @@ export function makeCastleK(level: number): THREE.Group {
     g.add(t);
   }
 
-  // --- bandera en lo alto del homenaje (ondea) y cristal en el nivel máximo
+  // --- flag on top of the keep (waves) and crystal at max level
   const top = keepTop * 1.3;
   const flag = piece(g, L >= 3 ? 'flag-wide' : 'flag', 0, top - 0.15, 0, Math.PI / 2, 0.9);
   flag.name = 'flag';
@@ -309,7 +309,7 @@ export function makeCastleK(level: number): THREE.Group {
 }
 
 // ------------------------------------------------------------
-//  Cabaña del peón (Fantasy Town Kit)
+//  Peon hut (Fantasy Town Kit)
 // ------------------------------------------------------------
 export function makeHutK(level: number): THREE.Group {
   const L = Math.max(1, Math.min(5, level));
@@ -334,7 +334,7 @@ export function makeHutK(level: number): THREE.Group {
 }
 
 // ------------------------------------------------------------
-//  Proyectiles
+//  Projectiles
 // ------------------------------------------------------------
 export function makeArrowK(): THREE.Object3D {
   const g = new THREE.Group();

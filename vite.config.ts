@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
 
-/** Versión del juego para la telemetría: el commit con el que se compila. */
+/** Game version for telemetry: the commit it's built from. */
 function appVersion() {
   const sha = process.env.GITHUB_SHA;
   if (sha) return sha.slice(0, 7);
@@ -11,8 +11,8 @@ function appVersion() {
 }
 
 /**
- * Solo en desarrollo: recibe el registro de cada partida (POST /__log) y lo guarda en logs/<sesión>.json.
- * Así se pueden analizar partidas reales (también jugadas desde el móvil) para equilibrar el juego.
+ * Development only: receives each game's log (POST /__log) and saves it to logs/<session>.json.
+ * That way real games (including ones played on mobile) can be analysed to balance the game.
  */
 function gameLogPlugin(): Plugin {
   const dir = path.resolve(__dirname, 'logs');
@@ -22,8 +22,8 @@ function gameLogPlugin(): Plugin {
     configureServer(server) {
       server.middlewares.use('/__log', (req, res) => {
         if (req.method !== 'POST') { res.statusCode = 405; res.end(); return; }
-        // Solo el propio juego. Exigir JSON obliga al navegador a preguntar antes (CORS), y Vite no
-        // deja pasar a otras webs; además, si viene de otra web (Origin distinto), fuera.
+        // Only the game itself. Requiring JSON forces the browser to ask first (CORS), and Vite doesn't
+        // let other sites through; also, if it comes from another site (different Origin), reject it.
         const type = String(req.headers['content-type'] ?? '');
         const origin = req.headers.origin;
         let sameOrigin = true;
@@ -49,8 +49,8 @@ function gameLogPlugin(): Plugin {
 }
 
 export default defineConfig(({ command }) => ({
-  // En producción, rutas relativas: el juego funciona en cualquier carpeta
-  // (GitHub Pages lo sirve en /coinkeep/). Modelos y sonidos usan import.meta.env.BASE_URL.
+  // In production, relative paths: the game works from any folder
+  // (GitHub Pages serves it at /coinkeep/). Models and sounds use import.meta.env.BASE_URL.
   base: command === 'build' ? './' : '/',
   plugins: [gameLogPlugin()],
   define: { __APP_VERSION__: JSON.stringify(appVersion()) },

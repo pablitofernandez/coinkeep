@@ -1,6 +1,6 @@
 // ============================================================
-//  Modelos 3D (Kenney, CC0). Se cargan todos al arrancar y luego
-//  se clonan: los clones comparten geometría y materiales.
+//  3D models (Kenney, CC0). All are loaded at startup and then
+//  cloned: clones share geometry and materials.
 // ============================================================
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -9,11 +9,11 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const FILES: Record<string, string[]> = {
   chars: ['character-male-b'],
-  // KayKit Adventurers: el pícaro (jugador), sus armas y las animaciones del esqueleto «Rig_Medium»
+  // KayKit Adventurers: the rogue (player), its weapons and the "Rig_Medium" skeleton animations
   kaykit: ['Rogue', 'Rig_Medium_General', 'Rig_Medium_MovementBasic', 'dagger.gltf', 'crossbow_1handed.gltf'],
-  // KayKit Skeletons (mismo esqueleto Rig_Medium que el pícaro: comparten animaciones)
+  // KayKit Skeletons (same Rig_Medium skeleton as the rogue: they share animations)
   skeletons: ['Skeleton_Warrior', 'Skeleton_Minion', 'Skeleton_Mage', 'Skeleton_Blade.gltf', 'Skeleton_Axe.gltf', 'Skeleton_Staff.gltf', 'Skeleton_Shield_Small_A.gltf'],
-  // Quaternius Animated Monster Pack (convertido de FBX a GLB): murciélago
+  // Quaternius Animated Monster Pack (converted from FBX to GLB): bat
   monsters: ['bat'],
   // Quaternius Ultimate Animated Animals
   animals: ['wolf'],
@@ -45,22 +45,22 @@ const FILES: Record<string, string[]> = {
 
 interface Asset { scene: THREE.Group; clips: THREE.AnimationClip[]; skinned: boolean }
 
-// El Nature Kit viene en tonos pastel turquesa: se pasa a la paleta del juego
+// The Nature Kit comes in turquoise pastel tones: remap them to the game's palette
 const NATURE_COLORS: Record<string, string> = {
   grass: '#5aa843', leafsGreen: '#4c9e3f', leafsDark: '#2f7a36', stone: '#a3a3ad', dirt: '#8f7652',
   woodBark: '#7a5232', woodBarkDark: '#5e3e26', woodInner: '#d9b98c',
 };
 const assets = new Map<string, Asset>();
-// Un único material por pack y nombre: así las piezas se pueden fusionar en una sola malla
+// A single material per pack and name: that way pieces can be merged into one mesh
 const sharedMats = new Map<string, THREE.Material>();
 
-/** Carga todos los modelos. `onProgress` recibe 0..1. */
+/** Loads all models. `onProgress` receives 0..1. */
 export async function loadAssets(onProgress: (k: number) => void = () => {}) {
   const loader = new GLTFLoader();
   const list = Object.entries(FILES).flatMap(([dir, names]) => names.map(n => ({ dir, n })));
   let done = 0;
   await Promise.all(list.map(async ({ dir, n: file }) => {
-    // sin extensión se entiende .glb; los .gltf se registran con el nombre sin extensión
+    // no extension means .glb; .gltf files are registered under the name without extension
     const n = file.replace(/\.gltf$/, '');
     const gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}models/${dir}/${file.includes('.') ? file : file + '.glb'}`);
     let skinned = false;
@@ -70,7 +70,7 @@ export async function loadAssets(onProgress: (k: number) => void = () => {}) {
         m.castShadow = true;
         m.receiveShadow = true;
         if ((m as THREE.SkinnedMesh).isSkinnedMesh) skinned = true;
-        // los modelos de Kenney vienen algo metálicos; en este estilo quedan mejor mate
+        // Kenney models come somewhat metallic; matte looks better in this style
         if (Array.isArray(m.material)) return;
         const key = dir + ':' + m.material.name;
         const known = sharedMats.get(key);
@@ -92,16 +92,16 @@ const skinnedMesh = (m: THREE.Mesh) => (m as THREE.SkinnedMesh).isSkinnedMesh ==
 
 function get(name: string): Asset {
   const a = assets.get(name);
-  if (!a) throw new Error('Modelo no cargado: ' + name);
+  if (!a) throw new Error('Model not loaded: ' + name);
   return a;
 }
 
-/** Copia de un modelo estático (comparte geometría y materiales). */
+/** Copy of a static model (shares geometry and materials). */
 export function model(name: string): THREE.Group {
   return get(name).scene.clone(true);
 }
 
-/** Personaje animado: modelo + mezclador con todas sus animaciones. */
+/** Animated character: model + mixer with all its animations. */
 export class Character {
   readonly root = new THREE.Group();
   readonly mixer: THREE.AnimationMixer;
@@ -110,12 +110,12 @@ export class Character {
   private current: THREE.AnimationAction | null = null;
   private oneShot: THREE.AnimationAction | null = null;
 
-  /** `clipsFrom`: otros modelos cuyas animaciones se añaden (mismo esqueleto, p. ej. los Rig_Medium de KayKit). */
+  /** `clipsFrom`: other models whose animations are added (same skeleton, e.g. KayKit's Rig_Medium). */
   constructor(name: string, scale = 1, ownMaterials = false, clipsFrom: string[] = []) {
     const a = get(name);
     const obj = cloneSkinned(a.scene) as THREE.Group;
     obj.scale.setScalar(scale);
-    // materiales propios si hay que hacerlos destellar sin afectar a los demás
+    // own materials if they need to flash without affecting the others
     if (ownMaterials) {
       obj.traverse(o => {
         const m = o as THREE.Mesh;
@@ -133,12 +133,12 @@ export class Character {
     }
   }
 
-  /** Busca un hueso / nodo por nombre (para colgar armas). */
+  /** Finds a bone / node by name (to attach weapons). */
   bone(name: string): THREE.Object3D | undefined {
     return this.root.getObjectByName(name);
   }
 
-  /** Crea una animación nueva `as` con solo las pistas de los huesos indicados (p. ej. tronco y brazos). */
+  /** Creates a new animation `as` with only the tracks of the given bones (e.g. torso and arms). */
   upperBody(clip: string, as: string, bones: string[]) {
     const src = this.actions.get(clip)?.getClip();
     if (!src) return;
@@ -146,7 +146,7 @@ export class Character {
     this.actions.set(as, this.mixer.clipAction(new THREE.AnimationClip(as, src.duration, tracks)));
   }
 
-  /** Animación en bucle (con transición suave). */
+  /** Looping animation (with a smooth crossfade). */
   play(name: string, timeScale = 1, fade = 0.15) {
     const act = this.actions.get(name);
     if (!act) return;
@@ -157,7 +157,7 @@ export class Character {
     this.current = act;
   }
 
-  /** Animación de una sola vez por encima de la actual (golpe, disparo, muerte). */
+  /** One-shot animation on top of the current one (hit, shot, death). */
   once(name: string, timeScale = 1, hold = false) {
     const act = this.actions.get(name);
     if (!act) return;
@@ -180,8 +180,8 @@ export class Character {
 }
 
 /**
- * Convierte un modelo en mallas instanciadas (una por cada sub-malla del modelo).
- * Para cientos de árboles o flores con muy pocas llamadas de dibujo.
+ * Turns a model into instanced meshes (one per sub-mesh of the model).
+ * For hundreds of trees or flowers with very few draw calls.
  */
 export function instanced(name: string, matrices: THREE.Matrix4[], shadows: boolean, skipMaterials: string[] = []): THREE.InstancedMesh[] {
   const src = get(name).scene;
@@ -202,15 +202,15 @@ export function instanced(name: string, matrices: THREE.Matrix4[], shadows: bool
 }
 
 // ------------------------------------------------------------
-//  Fusión de piezas estáticas (muchas menos llamadas de dibujo)
+//  Merging of static pieces (far fewer draw calls)
 // ------------------------------------------------------------
 const bakeCache = new Map<string, { geo: THREE.BufferGeometry; mat: THREE.Material }[]>();
-const KEEP = new Set(['flag', 'crystal']);   // piezas animadas: no se fusionan
+const KEEP = new Set(['flag', 'crystal']);   // animated pieces: not merged
 
 /**
- * Funde todas las mallas estáticas de `group` en una malla por material.
- * Las piezas animadas (banderas, cristales) se conservan aparte.
- * Con `key`, la geometría fusionada se reutiliza entre copias iguales (torres del mismo nivel).
+ * Merges all static meshes of `group` into one mesh per material.
+ * Animated pieces (flags, crystals) are kept separate.
+ * With `key`, the merged geometry is reused across identical copies (towers of the same level).
  */
 export function bake(group: THREE.Group, key?: string): THREE.Group {
   const out = new THREE.Group();
@@ -241,7 +241,7 @@ export function bake(group: THREE.Group, key?: string): THREE.Group {
     mesh.castShadow = true; mesh.receiveShadow = true;
     out.add(mesh);
   }
-  // las piezas animadas se pasan tal cual, conservando su posición
+  // animated pieces are passed through as they are, keeping their position
   for (const o of keep) {
     o.updateMatrixWorld(true);
     const mtx = new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld);

@@ -1,7 +1,7 @@
 import { autopilotDir, showcase, showcaseTick } from './game/cheats';
 import { createGame, step } from './game/sim';
 import type { Difficulty, GameState, Vec } from './game/types';
-import { DIFFICULTIES, DIFFICULTY } from './config';
+import { DIFFICULTIES } from './config';
 import { cleanName, leaderboardEnabled, rankOf, savedName, submitScore, topScores, type Score } from './leaderboard';
 import { Sound } from './audio';
 import { DevLog } from './devlog';
@@ -9,23 +9,28 @@ import { Telemetry } from './telemetry';
 import { Input, isTyping, preventBrowserZoom } from './input';
 import { loadAssets } from './render/assets';
 import { CAM_ELEVATION_SIN, View, fmt } from './render/view';
+import { LANGS, applyStatic, getLang, setLang, t } from './i18n';
+import { LATEST_VERSION, changelogHtml, hasUnseenNews, markNewsSeen } from './news';
 
 const $ = (id: string) => document.getElementById(id)!;
 
-// sin zoom del navegador en el móvil (doble toque o pellizco): el juego ocupa la pantalla entera
+// no browser zoom on mobile (double tap or pinch): the game fills the whole screen
 preventBrowserZoom();
 
-// --- carga de modelos 3D (antes de crear la escena)
+// texts of index.html in the player's language (before loading, so «Loading…» is already translated)
+applyStatic();
+
+// --- load the 3D models (before creating the scene)
 const loading = $('loading');
-await loadAssets(k => { loading.textContent = `Cargando… ${Math.round(k * 100)}%`; });
+await loadAssets(k => { loading.textContent = t('loading.pct', { pct: Math.round(k * 100) }); });
 loading.remove();
 
 const view = new View($('app'));
 const input = new Input(document.body, $('joy'), $('joy-knob'));
 const devlog = new DevLog();
-const telemetry = new Telemetry();   // estadísticas anónimas de la versión publicada (para equilibrar)
+const telemetry = new Telemetry();   // anonymous stats from the published version (for balancing)
 
-// --- pantalla de título: de fondo, una partida de exhibición (torres, lobos, zombis) con la cámara girando
+// --- title screen: in the background, a showcase game (towers, wolves, zombies) with the camera orbiting
 let G: GameState = createGame();
 showcase(G);
 view.reset(G);
@@ -35,21 +40,21 @@ $('title').classList.remove('hidden');
 view.orbit = Math.PI / 4;
 view.setZoom(0.85);
 
-// --- dificultad (se recuerda entre partidas)
+// --- difficulty (remembered between games)
 let difficulty: Difficulty = (() => {
   try { const d = localStorage.getItem('sg-diff') as Difficulty; return DIFFICULTIES.includes(d) ? d : 'normal'; } catch { return 'normal'; }
 })();
-/** Que los clics en botones no muevan el joystick ni empiecen la partida. */
+/** Keep button clicks from moving the joystick or starting the game. */
 const guard = (el: HTMLElement) => el.addEventListener('pointerdown', e => e.stopPropagation());
 const diffBox = $('diff');
 for (const d of DIFFICULTIES) {
   const b = document.createElement('button');
-  b.className = 'menu-btn'; b.textContent = DIFFICULTY[d].name; b.dataset.d = d;
+  b.className = 'menu-btn'; b.textContent = t(`diff.${d}`); b.dataset.d = d;
   b.setAttribute('role', 'radio');
   guard(b);
   b.addEventListener('click', () => {
     difficulty = d;
-    try { localStorage.setItem('sg-diff', d); } catch { /* sin almacenamiento */ }
+    try { localStorage.setItem('sg-diff', d); } catch { /* no storage */ }
     showDifficulty();
     if (!$('board').classList.contains('hidden')) void showBoard();
   });
@@ -63,9 +68,32 @@ function showDifficulty() {
 }
 showDifficulty();
 
-// --- clasificación global
+// --- language (follows the system; the ES | EN picker on the title screen overrides it)
+const langBox = $('lang');
+for (const l of LANGS) {
+  const b = document.createElement('button');
+  b.className = 'menu-btn'; b.textContent = l.toUpperCase(); b.dataset.l = l;
+  b.setAttribute('role', 'radio');
+  guard(b);
+  b.addEventListener('click', () => { setLang(l); showLang(); });
+  langBox.appendChild(b);
+}
+/** Re-render every text on screen in the current language. */
+function showLang() {
+  applyStatic();
+  for (const b of langBox.children as HTMLCollectionOf<HTMLElement>) {
+    b.classList.toggle('on', b.dataset.l === getLang());
+    b.setAttribute('aria-checked', String(b.dataset.l === getLang()));
+  }
+  for (const b of diffBox.children as HTMLCollectionOf<HTMLElement>) b.textContent = t(`diff.${b.dataset.d as Difficulty}`);
+  if (!$('board').classList.contains('hidden')) void showBoard();
+  if (!$('news').classList.contains('hidden')) showNews();
+}
+showLang();
+
+// --- global leaderboard
 const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-/** Pinta una lista de puntuaciones (con textContent: los nombres los escribe la gente). */
+/** Render a list of scores (with textContent: names are typed in by players). */
 function fillList(list: HTMLElement, scores: Score[], me?: Score, myRank?: number) {
   list.replaceChildren();
   const item = (pos: string, who: string, score: string, mine: boolean) => {
@@ -80,27 +108,42 @@ function fillList(list: HTMLElement, scores: Score[], me?: Score, myRank?: numbe
   scores.forEach((s, i) => {
     const mine = !!me && !shown && myRank === i + 1 && s.name === me.name && s.wave === me.wave && s.seconds === me.seconds;
     if (mine) shown = true;
-    item(`${i + 1}.`, s.name, `Oleada ${s.wave} · ${fmtTime(s.seconds)}`, mine);
+    item(`${i + 1}.`, s.name, t('board.row', { wave: s.wave, time: fmtTime(s.seconds) }), mine);
   });
-  if (me && myRank && !shown) item(`${myRank}.`, me.name, `Oleada ${me.wave} · ${fmtTime(me.seconds)}`, true);
-  if (!scores.length && !me) boardMessage(list, 'Todavía no hay récords. ¡Sé el primero!');
+  if (me && myRank && !shown) item(`${myRank}.`, me.name, t('board.row', { wave: me.wave, time: fmtTime(me.seconds) }), true);
+  if (!scores.length && !me) boardMessage(list, t('board.empty'));
 }
 function boardMessage(list: HTMLElement, text: string) {
   const li = document.createElement('li'); li.className = 'empty'; li.textContent = text; list.replaceChildren(li);
 }
 async function showBoard() {
   const list = $('board-list');
+  $('news').classList.add('hidden');
   $('board').classList.remove('hidden');
-  $('board-diff').textContent = DIFFICULTY[difficulty].name;
-  boardMessage(list, 'Cargando…');
-  try { fillList(list, await topScores(difficulty)); } catch { boardMessage(list, 'No se pudo cargar la clasificación.'); }
+  $('board-diff').textContent = t(`diff.${difficulty}`);
+  boardMessage(list, t('loading'));
+  try { fillList(list, await topScores(difficulty)); } catch { boardMessage(list, t('board.loadError')); }
 }
 for (const id of ['show-board', 'board-close', 'board']) guard($(id));
 $('show-board').addEventListener('click', () => void showBoard());
 $('board-close').addEventListener('click', () => $('board').classList.add('hidden'));
 if (!leaderboardEnabled) $('show-board').classList.add('hidden');
 
-/** Sale de la pantalla de título y empieza la partida de verdad. */
+// --- "What's new": the changelog (CHANGELOG.md / CHANGELOG.es.md), with a dot when there's an unseen version
+function showNews() {
+  $('board').classList.add('hidden');
+  $('news').classList.remove('hidden');
+  $('news-version').textContent = 'v' + LATEST_VERSION;
+  $('news-body').innerHTML = changelogHtml();   // our own Markdown file, escaped by changelogHtml()
+  $('news-dot').classList.add('hidden');
+  markNewsSeen();
+}
+for (const id of ['show-news', 'news-close', 'news']) guard($(id));
+$('show-news').addEventListener('click', showNews);
+$('news-close').addEventListener('click', () => $('news').classList.add('hidden'));
+if (hasUnseenNews()) $('news-dot').classList.remove('hidden');
+
+/** Leave the title screen and start the real game. */
 function startGame() {
   if (!inTitle) return;
   inTitle = false;
@@ -113,17 +156,17 @@ function startGame() {
   restart();
 }
 
-// --- sonido (botón 🔊 o tecla M)
+// --- sound (🔊 button or M key)
 const sound = new Sound();
 const muteBtn = $('mute');
 const showMute = (m: boolean) => { muteBtn.textContent = m ? '🔇' : '🔊'; };
 showMute(sound.muted);
 sound.onMuteChange = showMute;
-muteBtn.addEventListener('pointerdown', e => e.stopPropagation());   // que no mueva el joystick
+muteBtn.addEventListener('pointerdown', e => e.stopPropagation());   // don't move the joystick
 muteBtn.addEventListener('click', () => sound.toggleMute());
 window.addEventListener('keydown', e => { if (e.key.toLowerCase() === 'm' && !e.repeat && !isTyping(e)) sound.toggleMute(); });
 
-// --- música (botón o tecla N)
+// --- music (button or N key)
 const musicBtn = $('music');
 const showMusic = (on: boolean) => musicBtn.classList.toggle('off', !on);
 showMusic(sound.music.enabled);
@@ -142,7 +185,7 @@ function restart() {
   $('gameover').classList.add('hidden');
 }
 
-/** Vuelve a la portada (para cambiar de dificultad o ver la clasificación). */
+/** Go back to the title screen (to change difficulty or view the leaderboard). */
 function backToTitle() {
   G = createGame();
   showcase(G);
@@ -151,17 +194,18 @@ function backToTitle() {
   document.body.classList.add('title-mode');
   $('title').classList.remove('hidden', 'leaving');
   $('board').classList.add('hidden');
+  $('news').classList.add('hidden');
   $('gameover').classList.add('hidden');
   view.orbit = Math.PI / 4;
   view.setZoom(0.85);
 }
 input.onAny = () => { if (inTitle) startGame(); };
 
-// --- fin de partida: guardar el récord con tu nombre y ver la clasificación
+// --- game over: save your record with your name and view the leaderboard
 guard($('gameover'));
 $('go-again').addEventListener('click', () => restart());
 $('go-menu').addEventListener('click', () => backToTitle());
-// Intro o espacio también reintentan (si no estás escribiendo el nombre)
+// Enter or Space also retry (unless you're typing your name)
 window.addEventListener('keydown', e => {
   if (!G.over || inTitle || isTyping(e) || e.repeat) return;
   if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); restart(); }
@@ -172,45 +216,45 @@ async function onGameOver() {
   list.replaceChildren(); msg.textContent = '';
   const score: Score = { name: '', wave: G.wave, seconds: Math.round(G.t), difficulty: G.difficulty };
   finalScore = score;
-  $('go-text').textContent = `${DIFFICULTY[G.difficulty].name} · Oleada ${G.wave} · ${fmtTime(score.seconds)} · ${G.buildings.length} torres`;
+  $('go-text').textContent = t('over.summary', { diff: t(`diff.${G.difficulty}`), wave: G.wave, time: fmtTime(score.seconds), towers: G.buildings.length });
   const canSubmit = leaderboardEnabled && !G.cheated && G.wave >= 1;
   form.classList.toggle('hidden', !canSubmit);
   if (!leaderboardEnabled) return;
-  if (G.cheated) msg.textContent = 'Partida con trucos: no cuenta para la clasificación.';
+  if (G.cheated) msg.textContent = t('over.cheated');
   try {
     const [top, rank] = await Promise.all([topScores(score.difficulty), rankOf(score)]);
-    if (finalScore !== score) return;   // ya ha empezado otra partida
+    if (finalScore !== score) return;   // another game has already started
     fillList(list, top);
     if (!canSubmit) return;
-    msg.textContent = rank <= 10 ? `¡Entrarías en el puesto ${rank}! Escribe tu nombre.` : `Quedarías en el puesto ${rank}.`;
+    msg.textContent = t(rank <= 10 ? 'over.wouldEnter' : 'over.wouldBe', { rank });
     const name = $('go-name') as HTMLInputElement;
     name.value = savedName();
     if (!matchMedia('(pointer: coarse)').matches) name.focus();
-  } catch { msg.textContent = 'No se pudo conectar con la clasificación.'; }
+  } catch { msg.textContent = t('over.connectError'); }
 }
 $('go-form').addEventListener('submit', async e => {
   e.preventDefault();
   const field = $('go-name') as HTMLInputElement, send = $('go-send') as HTMLButtonElement, msg = $('go-msg');
   const name = cleanName(field.value);
-  if (!finalScore || !name) { msg.textContent = 'Escribe un nombre.'; field.focus(); return; }
-  send.disabled = true; msg.textContent = 'Guardando…';
+  if (!finalScore || !name) { msg.textContent = t('over.needName'); field.focus(); return; }
+  send.disabled = true; msg.textContent = t('over.saving');
   try {
     const me = { ...finalScore, name };
     await submitScore(me);
-    finalScore = null;   // una sola vez por partida
+    finalScore = null;   // only once per game
     const [top, rank] = await Promise.all([topScores(me.difficulty), rankOf(me)]);
     fillList($('go-list'), top, me, rank);
-    msg.textContent = `¡Guardado! Puesto ${rank} en ${DIFFICULTY[me.difficulty].name}.`;
+    msg.textContent = t('over.saved', { rank, diff: t(`diff.${me.difficulty}`) });
     $('go-form').classList.add('hidden');
     field.blur();
-  } catch { msg.textContent = 'No se pudo guardar. Inténtalo otra vez.'; }
+  } catch { msg.textContent = t('over.saveError'); }
   send.disabled = false;
 });
 
 /**
- * Convierte la dirección de pantalla en dirección de suelo.
- * Con la cámara en (+x, +y, +z): derecha de pantalla = (1, -1)/√2 y
- * abajo = (1, 1)/√2, este último acortado por la inclinación de la cámara.
+ * Convert a screen direction into a ground direction.
+ * With the camera at (+x, +y, +z): screen right = (1, -1)/√2 and
+ * down = (1, 1)/√2, the latter foreshortened by the camera tilt.
  */
 function screenToWorld(s: Vec): Vec {
   const mag = Math.hypot(s.x, s.y);
@@ -221,7 +265,7 @@ function screenToWorld(s: Vec): Vec {
   return { x: wx / wm * mag, y: wy / wm * mag };
 }
 
-// --- HUD (solo se toca el DOM cuando cambia algo: tocarlo cada frame calienta el móvil)
+// --- HUD (the DOM is only touched when something changes: touching it every frame heats up phones)
 const hud = { coins: $('hud-coins'), wave: $('hud-wave'), sub: $('hud-sub'), hp: $('hud-hp'), hpText: $('hud-hp-text'), help: $('help') };
 const cache = new Map<HTMLElement, string>();
 const setText = (el: HTMLElement, v: string) => { if (cache.get(el) !== v) { cache.set(el, v); el.textContent = v; } };
@@ -231,8 +275,8 @@ const setStyle = (el: HTMLElement, prop: 'width' | 'opacity', v: string) => {
 let lastOver = false;
 function updateHud() {
   setText(hud.coins, fmt(G.player.coins));
-  setText(hud.wave, G.wave ? 'Oleada ' + G.wave : 'Preparados…');
-  setText(hud.sub, `Siguiente en ${Math.ceil(G.waveTimer)}s · Enemigos: ${G.enemies.length}`);
+  setText(hud.wave, G.wave ? t('hud.wave', { n: G.wave }) : t('hud.ready'));
+  setText(hud.sub, t('hud.next', { s: Math.ceil(G.waveTimer), n: G.enemies.length }));
   setStyle(hud.hp, 'width', Math.round(G.base.hp / G.base.max * 100) + '%');
   setText(hud.hpText, `🏰 ${Math.ceil(G.base.hp)}/${G.base.max}`);
   setStyle(hud.help, 'opacity', Math.max(0, Math.min(1, (10 - G.t) / 2)).toFixed(2));
@@ -243,26 +287,26 @@ function updateHud() {
   lastOver = G.over;
 }
 
-// --- control del tiempo (lo usa el menú de desarrollo)
+// --- time control (used by the developer menu)
 export interface TimeControl {
-  scale: number;          // velocidad del juego (1 = normal)
+  scale: number;          // game speed (1 = normal)
   paused: boolean;
-  stepOnce: boolean;      // avanzar un solo paso estando en pausa
-  turboTo: number;        // > 0: simular a toda máquina (con piloto automático) hasta esta oleada
-  turboNote: string;      // resultado de la última simulación rápida
+  stepOnce: boolean;      // advance a single step while paused
+  turboTo: number;        // > 0: simulate flat out (with autopilot) up to this wave
+  turboNote: string;      // result of the last fast simulation
 }
 const time: TimeControl = { scale: 1, paused: false, stepOnce: false, turboTo: 0, turboNote: '' };
 
-// --- bucle principal (paso fijo para que la simulación sea estable)
-// Se limita a ~60 fps: en pantallas de 120 Hz el navegador pediría el doble de frames.
-// El umbral tiene mucho margen (10 ms, no 16,7): con uno ajustado, un fotograma que llegaba una
-// pizca antes de tiempo se saltaba entero y el juego daba tirones a 30 fps (se notaba en iPhone).
-// A 120 Hz se pinta uno de cada dos (60 fps); a 60 Hz, todos; a 90 Hz, todos.
+// --- main loop (fixed step so the simulation stays stable)
+// Capped at ~60 fps: on 120 Hz screens the browser would ask for twice as many frames.
+// The threshold has a lot of slack (10 ms, not 16.7): with a tight one, a frame that arrived a
+// hair early was skipped entirely and the game stuttered at 30 fps (noticeable on iPhone).
+// At 120 Hz every other frame is drawn (60 fps); at 60 Hz, all of them; at 90 Hz, all of them.
 const FIXED = 1 / 60;
 const MIN_FRAME_MS = 10;
 let acc = 0, last = performance.now();
 let fps = 60, fpsFrames = 0, fpsT = performance.now();
-let simMs = 0;   // tiempo de simulación por fotograma (media suave), para el menú de desarrollo
+let simMs = 0;   // simulation time per frame (smoothed average), for the developer menu
 function frame(now: number) {
   requestAnimationFrame(frame);
   if (now - last < MIN_FRAME_MS) return;
@@ -271,7 +315,7 @@ function frame(now: number) {
   fpsFrames++;
   if (now - fpsT >= 500) { fps = fpsFrames * 1000 / (now - fpsT); fpsFrames = 0; fpsT = now; }
   if (inTitle) {
-    // portada: la escena de exhibición sigue viva (sin sonido, sin HUD y sin registro)
+    // title screen: the showcase scene keeps running (no sound, no HUD and no logging)
     view.orbit = (view.orbit ?? 0) + dt * 0.1;
     acc += dt;
     while (acc >= FIXED) { step(G, FIXED, { x: 0, y: 0 }); showcaseTick(G); acc -= FIXED; }
@@ -300,8 +344,8 @@ function frame(now: number) {
 requestAnimationFrame(frame);
 
 /**
- * Simulación rápida: pasos a toda velocidad (~25 ms por fotograma para no congelar la pantalla),
- * con el piloto automático comprando, hasta llegar a la oleada pedida o perder.
+ * Fast simulation: steps at full speed (~25 ms per frame so the screen doesn't freeze),
+ * with the autopilot buying, until reaching the requested wave or losing.
  */
 function turbo() {
   const prevAuto = G.dev.autoplay;
@@ -310,24 +354,24 @@ function turbo() {
   const t0 = performance.now();
   while (performance.now() - t0 < 25 && G.wave < time.turboTo && !G.over) {
     for (let k = 0; k < 60; k++) step(G, FIXED, autopilotDir(G));
-    // sin esto se amontonarían miles de textos flotantes y sonidos
+    // without this, thousands of floating texts and sounds would pile up
     G.events.length = 0;
   }
   G.dev.autoplay = prevAuto;
   if (G.wave >= time.turboTo || G.over) {
-    time.turboNote = G.over ? `Perdida en la oleada ${G.wave} (${Math.round(G.t)} s de juego)` : `Llegó a la oleada ${G.wave} (${Math.round(G.t)} s de juego)`;
+    time.turboNote = G.over ? `Lost at wave ${G.wave} (${Math.round(G.t)} s of play)` : `Reached wave ${G.wave} (${Math.round(G.t)} s of play)`;
     time.turboTo = 0;
   }
 }
 
-// para depurar desde la consola (solo con `npm run dev`: en la versión publicada serían trucos gratis
-// y las partidas tramposas llegarían a la clasificación como limpias)
+// for debugging from the console (only with `npm run dev`: in the published version they'd be free cheats
+// and cheated games would reach the leaderboard as clean ones)
 if (import.meta.env.DEV) {
   Object.assign(window, {
     game: () => G,
     view,
     sound,
-    /** Avanza la simulación N segundos de golpe (útil para pruebas desde la consola). */
+    /** Advance the simulation N seconds at once (handy for testing from the console). */
     advance: (seconds: number, dir: Vec = { x: 0, y: 0 }) => {
       for (let t = 0; t < seconds; t += FIXED) step(G, FIXED, dir);
       sound.handle(G, G.events);
@@ -338,7 +382,7 @@ if (import.meta.env.DEV) {
   });
 }
 
-// --- menú de desarrollador (solo con `npm run dev`; F1 o º, o tres toques en el contador de oleada)
+// --- developer menu (only with `npm run dev`; F1 or º, or three taps on the wave counter)
 if (import.meta.env.DEV) {
   import('./dev/panel').then(m => m.initDevPanel({
     game: () => G, view, sound, devlog, time, restart: () => (inTitle ? startGame() : restart()), fps: () => fps, simMs: () => simMs,

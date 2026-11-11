@@ -1,8 +1,8 @@
 // ============================================================
-//  Menú de desarrollador. Solo se carga con `npm run dev`.
-//  Se abre con F1 o con la tecla º (a la izquierda del 1), y en el
-//  móvil tocando tres veces el contador de oleada.
-//  Cualquier truco marca la partida como «con trampas» en el registro.
+//  Developer menu. Only loaded with `npm run dev`.
+//  Opens with F1 or the º key (left of 1), and on mobile by
+//  tapping the wave counter three times.
+//  Any cheat marks the game as "cheated" in the log.
 // ============================================================
 import type { Sound } from '../audio';
 import type { DevLog } from '../devlog';
@@ -24,22 +24,22 @@ export interface DevContext {
 }
 
 const SFX: [SfxName, string][] = [
-  ['sword', 'Espada'], ['bow', 'Ballesta'], ['arrow', 'Flecha torre'], ['cannon', 'Cañón'], ['boom', 'Explosión'],
-  ['die', 'Muerte zombi'], ['dieBones', 'Muerte esqueleto'], ['dieBat', 'Muerte murciélago'], ['heal', 'Curación del mago'], ['bossDie', 'Muerte jefe'], ['bite', 'Mordisco'], ['coin', 'Moneda'], ['pay', 'Pagar'],
-  ['build', 'Construir'], ['upgrade', 'Mejorar'], ['baseHit', 'Golpe castillo'], ['wave', 'Oleada'], ['boss', 'Jefe'],
-  ['waveClear', 'Oleada superada'], ['gameOver', 'Derrota'],
+  ['sword', 'Sword'], ['bow', 'Crossbow'], ['arrow', 'Tower arrow'], ['cannon', 'Cannon'], ['boom', 'Explosion'],
+  ['die', 'Zombie death'], ['dieBones', 'Skeleton death'], ['dieBat', 'Bat death'], ['heal', 'Mage heal'], ['bossDie', 'Boss death'], ['bite', 'Bite'], ['coin', 'Coin'], ['pay', 'Pay'],
+  ['build', 'Build'], ['upgrade', 'Upgrade'], ['baseHit', 'Castle hit'], ['wave', 'Wave'], ['boss', 'Boss'],
+  ['waveClear', 'Wave cleared'], ['gameOver', 'Defeat'],
 ];
 
-/** Nombres en español de las claves del registro. */
+/** Readable names for the log keys. */
 const NAMES: Record<string, string> = {
-  ground: 'suelo', table: 'mesas', dog: 'lobos', peon: 'peones',
-  sword: 'espada', bow: 'ballesta', archer: 'arqueras', cannon: 'cañones',
-  power: 'fuerza', repair: 'reparar', forge: 'forja', kennel: 'lobos', upgrade: 'mejoras',
-  zombie: 'guerreros', runner: 'esbirros', bat: 'murciélagos', shaman: 'magos', boss: 'jefes',
+  ground: 'ground', table: 'tables', dog: 'wolves', peon: 'peons',
+  sword: 'sword', bow: 'crossbow', archer: 'archers', cannon: 'cannons',
+  power: 'strength', repair: 'repair', forge: 'forge', kennel: 'wolves', upgrade: 'upgrades',
+  zombie: 'warriors', runner: 'minions', bat: 'bats', shaman: 'mages', boss: 'bosses',
 };
 
 const REPEATABLE: [PadType, string][] = [
-  ['power', '💪 Fuerza'], ['forge', '🔨 Forja'], ['kennel', '🐺 Lobos'], ['peon', '🧔 Peones'], ['repair', '🏰 Reparar'],
+  ['power', '💪 Strength'], ['forge', '🔨 Forge'], ['kennel', '🐺 Wolves'], ['peon', '🧔 Peons'], ['repair', '🏰 Repair'],
 ];
 
 export function initDevPanel(ctx: DevContext) {
@@ -47,15 +47,15 @@ export function initDevPanel(ctx: DevContext) {
   const refreshers: (() => void)[] = [];
   const onRefresh = (f: () => void) => { refreshers.push(f); };
 
-  // ---------- estructura ----------
+  // ---------- structure ----------
   const root = el('div', 'dev-panel hidden');
   root.id = 'dev';
-  // que tocar el menú no mueva el joystick ni reinicie la partida
+  // so touching the menu doesn't move the joystick or restart the game
   for (const ev of ['pointerdown', 'touchstart', 'mousedown'] as const) root.addEventListener(ev, e => e.stopPropagation());
   document.body.appendChild(root);
 
   const head = el('div', 'dev-head');
-  const title = el('div', 'dev-title', '🛠 Desarrollo');
+  const title = el('div', 'dev-title', '🛠 Developer');
   const close = el('button', 'dev-close', '✕');
   close.addEventListener('click', () => toggle(false));
   head.append(title, close);
@@ -65,10 +65,10 @@ export function initDevPanel(ctx: DevContext) {
   const body = el('div', 'dev-body');
   root.appendChild(body);
 
-  /** Ejecuta un truco y refresca el menú. */
+  /** Runs a cheat and refreshes the menu. */
   const act = (f: () => void) => () => { f(); G().cheated = true; refresh(); };
 
-  // ---------- piezas de interfaz ----------
+  // ---------- UI pieces ----------
   function section(name: string, open = false) {
     const d = el('details', 'dev-sec') as HTMLDetailsElement;
     d.open = open;
@@ -88,7 +88,7 @@ export function initDevPanel(ctx: DevContext) {
     parent.appendChild(b);
     return b;
   }
-  /** Interruptor ligado a un truco de G.dev (se relee en cada refresco: la partida nueva los apaga). */
+  /** Toggle bound to a G.dev cheat (re-read on every refresh: a new game turns them off). */
   function flag(parent: HTMLElement, text: string, key: { [K in keyof DevFlags]: DevFlags[K] extends boolean ? K : never }[keyof DevFlags]) {
     const b = el('button', 'dev-btn dev-toggle', text);
     b.addEventListener('click', act(() => { G().dev[key] = !G().dev[key]; }));
@@ -96,7 +96,7 @@ export function initDevPanel(ctx: DevContext) {
     onRefresh(() => b.classList.toggle('on', G().dev[key]));
     return b;
   }
-  /** Botones de opción excluyentes (multiplicadores). */
+  /** Mutually exclusive option buttons (multipliers). */
   function choices(parent: HTMLElement, values: number[], get: () => number, set: (v: number) => void, fmt = (v: number) => '×' + v) {
     const bs = values.map(v => {
       const b = el('button', 'dev-btn dev-choice', fmt(v));
@@ -120,60 +120,60 @@ export function initDevPanel(ctx: DevContext) {
   }
 
   // ======================================================
-  //  🧟 Enemigos y oleadas
+  //  🧟 Enemies and waves
   // ======================================================
   {
-    const s = section('🧟 Enemigos y oleadas', true);
-    let r = row(s, 'Tipo');
+    const s = section('🧟 Enemies and waves', true);
+    let r = row(s, 'Type');
     const kindSel = el('select', 'dev-select') as HTMLSelectElement;
-    for (const [v, t] of [['', 'Mezcla de la oleada'], ...Object.entries(ENEMY_KINDS).map(([k, d]) => [k, d.name])]) {
+    for (const [v, t] of [['', 'Wave mix'], ...Object.entries(ENEMY_KINDS).map(([k, d]) => [k, d.name])]) {
       const o = document.createElement('option'); o.value = v; o.textContent = t; kindSel.appendChild(o);
     }
     r.appendChild(kindSel);
     const kind = () => (kindSel.value || undefined) as EnemyKind | undefined;
-    r = row(s, 'Del bosque');
+    r = row(s, 'From the forest');
     for (const n of [1, 10, 50, 200]) button(r, '+' + n, () => cheat.spawnMany(G(), n, 'forest', false, kind()));
-    r = row(s, 'Cerca de ti');
+    r = row(s, 'Near you');
     for (const n of [1, 10, 50, 200]) button(r, '+' + n, () => cheat.spawnMany(G(), n, 'near', false, kind()));
-    r = row(s, 'Jefe');
-    button(r, 'En el bosque', () => cheat.spawnMany(G(), 1, 'forest', true));
-    button(r, 'Cerca de ti', () => cheat.spawnMany(G(), 1, 'near', true));
-    r = row(s, 'Saltar a oleada');
+    r = row(s, 'Boss');
+    button(r, 'In the forest', () => cheat.spawnMany(G(), 1, 'forest', true));
+    button(r, 'Near you', () => cheat.spawnMany(G(), 1, 'near', true));
+    r = row(s, 'Jump to wave');
     const waveIn = numberInput(r, 10);
-    button(r, 'Ir', () => cheat.jumpToWave(G(), +waveIn.value || 1));
+    button(r, 'Go', () => cheat.jumpToWave(G(), +waveIn.value || 1));
     r = row(s);
-    button(r, 'Siguiente oleada ya', () => cheat.nextWaveNow(G()));
-    flag(r, 'Pausar contador', 'pauseWaves');
+    button(r, 'Next wave now', () => cheat.nextWaveNow(G()));
+    flag(r, 'Pause countdown', 'pauseWaves');
     r = row(s);
-    button(r, 'Matar a todos', () => cheat.killAll(G(), false));
-    button(r, 'Matar (sueltan monedas)', () => cheat.killAll(G(), true));
-    flag(r, 'Congelar', 'freeze');
-    r = row(s, 'Vida de los nuevos');
+    button(r, 'Kill all', () => cheat.killAll(G(), false));
+    button(r, 'Kill (drop coins)', () => cheat.killAll(G(), true));
+    flag(r, 'Freeze', 'freeze');
+    r = row(s, 'HP of new ones');
     choices(r, [0.25, 0.5, 1, 2, 5, 10], () => G().dev.enemyHp, v => { G().dev.enemyHp = v; });
-    r = row(s, 'Velocidad');
+    r = row(s, 'Speed');
     choices(r, [0.5, 1, 2, 3], () => G().dev.enemySpeed, v => { G().dev.enemySpeed = v; });
   }
 
   // ======================================================
-  //  🏰 Castillo y jugador
+  //  🏰 Castle and player
   // ======================================================
   {
-    const s = section('🏰 Castillo y jugador');
-    let r = row(s, 'Vida del castillo');
-    button(r, 'Llenar', () => cheat.setBaseHp(G(), G().base.max));
-    button(r, 'A 1', () => cheat.setBaseHp(G(), 1));
+    const s = section('🏰 Castle and player');
+    let r = row(s, 'Castle HP');
+    button(r, 'Fill', () => cheat.setBaseHp(G(), G().base.max));
+    button(r, 'To 1', () => cheat.setBaseHp(G(), 1));
     flag(r, 'Invulnerable', 'godCastle');
     info(r, () => `${Math.ceil(G().base.hp)}/${G().base.max}`);
-    r = row(s, 'Nivel del castillo');
+    r = row(s, 'Castle level');
     button(r, '−', () => cheat.setCastleLevel(G(), G().castleLevel - 1));
-    info(r, () => `Nv ${G().castleLevel}`);
+    info(r, () => `Lv ${G().castleLevel}`);
     button(r, '+', () => cheat.setCastleLevel(G(), G().castleLevel + 1));
-    r = row(s, 'Daño del pícaro');
+    r = row(s, 'Rogue damage');
     choices(r, [0, 1, 10, 100], () => G().dev.playerDmg, v => { G().dev.playerDmg = v; });
-    r = row(s, 'Velocidad del pícaro');
+    r = row(s, 'Rogue speed');
     choices(r, [1, 2, 3], () => G().dev.playerSpeed, v => { G().dev.playerSpeed = v; });
-    r = row(s, 'Teletransporte');
-    button(r, 'Al castillo', () => cheat.teleport(G(), cheat.castleFront()));
+    r = row(s, 'Teleport');
+    button(r, 'To the castle', () => cheat.teleport(G(), cheat.castleFront()));
     const sel = el('select', 'dev-select') as HTMLSelectElement;
     r.appendChild(sel);
     sel.addEventListener('change', () => {
@@ -186,94 +186,94 @@ export function initDevPanel(ctx: DevContext) {
       const key = pads.map(p => p.id).join(',');
       if (sel.dataset.key === key) return;
       sel.dataset.key = key;
-      sel.innerHTML = '<option value="">A una parcela…</option>' +
+      sel.innerHTML = '<option value="">To a plot…</option>' +
         pads.map(p => `<option value="${p.id}">${padName(p.type)} (${p.cost})</option>`).join('');
     });
   }
 
   // ======================================================
-  //  💰 Economía
+  //  💰 Economy
   // ======================================================
   {
-    const s = section('💰 Economía');
-    let r = row(s, 'Monedas');
-    for (const n of [100, 1000, 10000]) button(r, '+' + n.toLocaleString('es'), () => cheat.addCoins(G(), n));
+    const s = section('💰 Economy');
+    let r = row(s, 'Coins');
+    for (const n of [100, 1000, 10000]) button(r, '+' + n.toLocaleString('en'), () => cheat.addCoins(G(), n));
     r = row(s);
-    flag(r, 'Dinero infinito', 'infiniteMoney');
-    flag(r, 'Construir gratis', 'freeBuild');
+    flag(r, 'Infinite money', 'infiniteMoney');
+    flag(r, 'Free building', 'freeBuild');
     r = row(s);
-    button(r, 'Mostrar todas las parcelas', () => cheat.unlockAllPads(G()));
-    flag(r, '🤖 Piloto automático', 'autoplay');
-    s.appendChild(el('p', 'dev-note', 'Piloto automático: recoge al instante todo el dinero y compra la parcela más barata que pueda pagar.'));
+    button(r, 'Show all plots', () => cheat.unlockAllPads(G()));
+    flag(r, '🤖 Autopilot', 'autoplay');
+    s.appendChild(el('p', 'dev-note', 'Autopilot: instantly collects all the money and buys the cheapest plot it can afford.'));
   }
 
   // ======================================================
-  //  🏗️ Construcción
+  //  🏗️ Building
   // ======================================================
   {
-    const s = section('🏗️ Construcción');
-    let r = row(s, 'Torres');
-    button(r, 'Construir las visibles', () => cheat.buildAllTowers(G()));
-    button(r, 'Construir TODAS', () => cheat.buildAllTowers(G(), true));
-    button(r, 'Todas a nivel máximo', () => cheat.maxAllTowers(G()));
+    const s = section('🏗️ Building');
+    let r = row(s, 'Towers');
+    button(r, 'Build visible ones', () => cheat.buildAllTowers(G()));
+    button(r, 'Build ALL', () => cheat.buildAllTowers(G(), true));
+    button(r, 'All to max level', () => cheat.maxAllTowers(G()));
     for (const [type, name] of REPEATABLE) {
       r = row(s, name);
-      info(r, () => `Nv ${cheat.padLevel(G(), type)}`);
+      info(r, () => `Lv ${cheat.padLevel(G(), type)}`);
       button(r, '+1', () => cheat.levelUp(G(), type, 1));
       button(r, '+5', () => cheat.levelUp(G(), type, 5));
     }
   }
 
   // ======================================================
-  //  ⏱️ Tiempo
+  //  ⏱️ Time
   // ======================================================
   {
-    const s = section('⏱️ Tiempo');
-    let r = row(s, 'Velocidad');
+    const s = section('⏱️ Time');
+    let r = row(s, 'Speed');
     choices(r, [0.25, 0.5, 1, 2, 4, 8], () => ctx.time.scale, v => { ctx.time.scale = v; ctx.time.paused = false; });
     r = row(s);
-    const pause = button(r, '⏸ Pausa', () => { ctx.time.paused = !ctx.time.paused; }, 'dev-toggle');
-    onRefresh(() => { pause.classList.toggle('on', ctx.time.paused); pause.textContent = ctx.time.paused ? '▶ Seguir' : '⏸ Pausa'; });
-    button(r, '⏭ Un paso', () => { ctx.time.paused = true; ctx.time.stepOnce = true; });
-    r = row(s, 'Simular hasta oleada');
+    const pause = button(r, '⏸ Pause', () => { ctx.time.paused = !ctx.time.paused; }, 'dev-toggle');
+    onRefresh(() => { pause.classList.toggle('on', ctx.time.paused); pause.textContent = ctx.time.paused ? '▶ Resume' : '⏸ Pause'; });
+    button(r, '⏭ One step', () => { ctx.time.paused = true; ctx.time.stepOnce = true; });
+    r = row(s, 'Simulate to wave');
     const simIn = numberInput(r, 20);
-    const simBtn = button(r, 'Simular', () => {
-      if (ctx.time.turboTo > 0) { ctx.time.turboTo = 0; ctx.time.turboNote = 'Simulación parada'; return; }
+    const simBtn = button(r, 'Simulate', () => {
+      if (ctx.time.turboTo > 0) { ctx.time.turboTo = 0; ctx.time.turboNote = 'Simulation stopped'; return; }
       ctx.time.turboNote = '';
       ctx.time.turboTo = Math.max(G().wave + 1, +simIn.value || 1);
     });
-    onRefresh(() => { simBtn.textContent = ctx.time.turboTo > 0 ? `Parar (oleada ${G().wave})` : 'Simular'; });
+    onRefresh(() => { simBtn.textContent = ctx.time.turboTo > 0 ? `Stop (wave ${G().wave})` : 'Simulate'; });
     r = row(s);
     info(r, () => ctx.time.turboNote);
-    s.appendChild(el('p', 'dev-note', 'Simula a toda velocidad con el piloto automático comprando, sin que tú muevas al pícaro. Útil para ver cómo escala la economía.'));
+    s.appendChild(el('p', 'dev-note', 'Simulates at full speed with the autopilot buying, without you moving the rogue. Useful to see how the economy scales.'));
     r = row(s);
-    button(r, '🔄 Nueva partida', () => { ctx.restart(); ctx.time.turboTo = 0; });
+    button(r, '🔄 New game', () => { ctx.restart(); ctx.time.turboTo = 0; });
   }
 
   // ======================================================
-  //  👁️ Visualización
+  //  👁️ Display
   // ======================================================
   {
-    const s = section('👁️ Visualización');
-    let r = row(s, 'Dibujar');
+    const s = section('👁️ Display');
+    let r = row(s, 'Draw');
     const dbg = ctx.view.debug.opts;
-    for (const [key, name] of [['colliders', 'Colisiones'], ['ranges', 'Alcances'], ['paths', 'Caminos ayudantes']] as const) {
+    for (const [key, name] of [['colliders', 'Colliders'], ['ranges', 'Ranges'], ['paths', 'Helper paths']] as const) {
       const b = el('button', 'dev-btn dev-toggle', name);
       b.addEventListener('click', () => { dbg[key] = !dbg[key]; refresh(); });
       r.appendChild(b);
       onRefresh(() => b.classList.toggle('on', dbg[key]));
     }
-    r = row(s, 'Zoom de cámara');
+    r = row(s, 'Camera zoom');
     const zoom = el('input', 'dev-range') as HTMLInputElement;
     zoom.type = 'range'; zoom.min = '0.3'; zoom.max = '2.5'; zoom.step = '0.05'; zoom.value = '1';
     zoom.addEventListener('input', () => ctx.view.setZoom(+zoom.value));
     r.appendChild(zoom);
-    const zr = el('button', 'dev-btn', 'Normal');
+    const zr = el('button', 'dev-btn', 'Reset');
     zr.addEventListener('click', () => { zoom.value = '1'; ctx.view.setZoom(1); });
     r.appendChild(zr);
     r = row(s);
-    button(r, '🌲 Regenerar decorado', () => cheat.regenProps(G()));
-    s.appendChild(el('p', 'dev-note', 'Rojo: obstáculos · Rosa: castillo · Verde: pícaro · Naranja: zombis · Azul: ayudantes. Alcances: blanco espada, celeste ballesta, amarillo arqueras, naranja cañones.'));
+    button(r, '🌲 Regenerate scenery', () => cheat.regenProps(G()));
+    s.appendChild(el('p', 'dev-note', 'Red: obstacles · Pink: castle · Green: rogue · Orange: zombies · Blue: helpers. Ranges: white sword, light blue crossbow, yellow archers, orange cannons.'));
   }
 
   // ======================================================
@@ -285,12 +285,12 @@ export function initDevPanel(ctx: DevContext) {
     s.appendChild(grid);
     for (const [name, label] of SFX) {
       const b = el('button', 'dev-btn', label);
-      b.addEventListener('click', () => ctx.sound.test(name));   // escuchar no cuenta como trampa
+      b.addEventListener('click', () => ctx.sound.test(name));   // listening doesn't count as cheating
       grid.appendChild(b);
     }
     for (const [label, set, get] of [
-      ['Efectos', (v: number) => ctx.sound.setSfxVolume(v), () => 1],
-      ['Música', (v: number) => ctx.sound.music.setVolume(v), () => ctx.sound.music.volume],
+      ['Effects', (v: number) => ctx.sound.setSfxVolume(v), () => 1],
+      ['Music', (v: number) => ctx.sound.music.setVolume(v), () => ctx.sound.music.volume],
     ] as const) {
       const r = row(s, label);
       const sl = el('input', 'dev-range') as HTMLInputElement;
@@ -298,14 +298,14 @@ export function initDevPanel(ctx: DevContext) {
       sl.addEventListener('input', () => set(+sl.value));
       r.appendChild(sl);
     }
-    s.appendChild(el('p', 'dev-note', 'Si no suena nada, haz clic primero en el juego (el navegador no deja sonar audio sin un clic).'));
+    s.appendChild(el('p', 'dev-note', 'If nothing plays, click in the game first (the browser won\'t play audio without a click).'));
   }
 
   // ======================================================
-  //  📊 Datos
+  //  📊 Data
   // ======================================================
   {
-    const s = section('📊 Datos de la partida');
+    const s = section('📊 Game data');
     const table = el('div', 'dev-data');
     s.appendChild(table);
     onRefresh(() => {
@@ -313,37 +313,37 @@ export function initDevPanel(ctx: DevContext) {
       const g = G(), w = cheat.liveWave(g), st = g.stats;
       const kv = (o: Record<string, number>) => Object.entries(o).filter(([, v]) => v).map(([k, v]) => `${NAMES[k] ?? k} ${v}`).join(' · ') || '—';
       const html =
-        `<b>Oleada ${g.wave} en curso</b> (${w.seconds} s)<br>` +
-        `Ganado: ${kv(w.earned)}<br>Gastado: ${kv(w.spent)}<br>Muertes: ${kv(w.kills)}<br>` +
-        `Daño al castillo: ${w.baseDamage} · Enemigos salidos: ${w.spawned} (${kv(w.spawnedKind)})<br><br>` +
+        `<b>Wave ${g.wave} in progress</b> (${w.seconds} s)<br>` +
+        `Earned: ${kv(w.earned)}<br>Spent: ${kv(w.spent)}<br>Kills: ${kv(w.kills)}<br>` +
+        `Castle damage: ${w.baseDamage} · Enemies spawned: ${w.spawned} (${kv(w.spawnedKind)})<br><br>` +
         `<b>Total</b> (${Math.round(g.t)} s)<br>` +
-        `Ganado: ${kv(st.earned)}<br>Gastado: ${kv(st.spent as Record<string, number>)}<br>Muertes: ${kv(st.kills)}<br>` +
-        `Torres: ${g.buildings.map(b => (b.type === 'archer' ? 'A' : 'C') + b.level).join(' ') || '—'}<br>` +
-        `Forja ×${g.towerMult.toFixed(2)} · Espada ${(g.player.swordDmg * g.towerMult).toFixed(1)} · Ballesta ${(g.player.bowDmg * g.towerMult).toFixed(1)}<br>` +
-        `Monedas: en mano ${g.player.coins} · suelo ${g.drops.reduce((a, c) => a + c.worth, 0)} · mesas ${g.buildings.reduce((a, b) => a + b.table, 0)}`;
+        `Earned: ${kv(st.earned)}<br>Spent: ${kv(st.spent as Record<string, number>)}<br>Kills: ${kv(st.kills)}<br>` +
+        `Towers: ${g.buildings.map(b => (b.type === 'archer' ? 'A' : 'C') + b.level).join(' ') || '—'}<br>` +
+        `Forge ×${g.towerMult.toFixed(2)} · Sword ${(g.player.swordDmg * g.towerMult).toFixed(1)} · Crossbow ${(g.player.bowDmg * g.towerMult).toFixed(1)}<br>` +
+        `Coins: in hand ${g.player.coins} · ground ${g.drops.reduce((a, c) => a + c.worth, 0)} · tables ${g.buildings.reduce((a, b) => a + b.table, 0)}`;
       if (table.innerHTML !== html) table.innerHTML = html;
     });
     const r = row(s);
-    const send = el('button', 'dev-btn', '📤 Enviar registro ahora');
+    const send = el('button', 'dev-btn', '📤 Send log now');
     send.addEventListener('click', () => { ctx.devlog.sendNow(G()); setTimeout(refresh, 400); });
     r.appendChild(send);
     info(r, () => {
       const n = ctx.devlog.pendingCount();
-      return [ctx.devlog.status, n ? `${n} registro(s) esperando en el navegador` : ''].filter(Boolean).join(' · ');
+      return [ctx.devlog.status, n ? `${n} log(s) waiting in the browser` : ''].filter(Boolean).join(' · ');
     });
   }
 
-  // ---------- refresco periódico (solo con el menú abierto) ----------
+  // ---------- periodic refresh (only while the menu is open) ----------
   const view = ctx.view;
   function refresh() {
     const g = G();
     const info = view.renderer.info.render;
     const t = ctx.view.timing;
     stats.textContent =
-      `${Math.round(ctx.fps())} FPS · ms por fotograma: simulación ${ctx.simMs().toFixed(1)} · 3D ${t.gl.toFixed(1)} · etiquetas ${t.labels.toFixed(1)} · ` +
-      `${info.calls} llamadas · ${(info.triangles / 1000).toFixed(0)}k triángulos · ` +
-      `${g.enemies.length} enemigos · ${g.shots.length} disparos · ${g.drops.length} monedas · ${g.helpers.length} ayudantes`;
-    cheatBadge.textContent = g.cheated ? '⚠ Partida con trampas: el registro irá marcado' : '';
+      `${Math.round(ctx.fps())} FPS · ms per frame: simulation ${ctx.simMs().toFixed(1)} · 3D ${t.gl.toFixed(1)} · labels ${t.labels.toFixed(1)} · ` +
+      `${info.calls} calls · ${(info.triangles / 1000).toFixed(0)}k triangles · ` +
+      `${g.enemies.length} enemies · ${g.shots.length} shots · ${g.drops.length} coins · ${g.helpers.length} helpers`;
+    cheatBadge.textContent = g.cheated ? '⚠ Cheated game: the log will be flagged' : '';
     for (const f of refreshers) f();
   }
   let timer = 0;
@@ -353,8 +353,8 @@ export function initDevPanel(ctx: DevContext) {
     if (open) { refresh(); timer = window.setInterval(refresh, 250); }
   }
 
-  // ---------- apertura ----------
-  // en fase de captura y cortando la propagación: que la tecla no llegue al juego (reiniciaría tras perder)
+  // ---------- opening ----------
+  // in the capture phase and stopping propagation: the key must not reach the game (it would restart after losing)
   window.addEventListener('keydown', e => {
     if (e.key === 'F1' || e.code === 'Backquote' || e.key === 'º') {
       e.preventDefault();
@@ -362,7 +362,7 @@ export function initDevPanel(ctx: DevContext) {
       if (!e.repeat) toggle();
     }
   }, true);
-  // móvil: tres toques seguidos en el contador de oleada
+  // mobile: three quick taps on the wave counter
   const waveEl = document.querySelector('.hud-center') as HTMLElement | null;
   if (waveEl) {
     waveEl.style.pointerEvents = 'auto';
@@ -386,5 +386,5 @@ function el(tag: string, cls = '', text?: string) {
 }
 
 function padName(t: PadType) {
-  return ({ archer: '🏹 Arquera', cannon: '💣 Cañón', power: '💪 Fuerza', repair: '🏰 Reparar', forge: '🔨 Forja', kennel: '🐺 Lobo', peon: '🧔 Peón', upgrade: '⬆ Mejora torre' } as Record<PadType, string>)[t];
+  return ({ archer: '🏹 Archer', cannon: '💣 Cannon', power: '💪 Strength', repair: '🏰 Repair', forge: '🔨 Forge', kennel: '🐺 Wolf', peon: '🧔 Peon', upgrade: '⬆ Tower upgrade' } as Record<PadType, string>)[t];
 }

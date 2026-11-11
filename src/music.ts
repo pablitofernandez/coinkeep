@@ -1,25 +1,25 @@
 // ============================================================
-//  Música de fantasía medieval sintetizada en tiempo real.
-//  Misma composición que la versión chiptune (re menor, 16 compases),
-//  pero orquestada con instrumentos «de verdad»:
-//    - flauta (melodía): senoidal + triangular, soplido y vibrato
-//    - arpa (arpegio): cuerda pulsada Karplus-Strong precalculada
-//    - cuerdas (colchón): sierras desafinadas con entrada lenta
-//    - chelo (bajo): sierra muy filtrada
-//    - tambores de piel graves y pandereta suave
-//  Todo pasa por una reverberación de sala de castillo.
+//  Medieval fantasy music synthesized in real time.
+//  Same composition as the chiptune version (D minor, 16 bars),
+//  but orchestrated with "real" instruments:
+//    - flute (melody): sine + triangle, breath and vibrato
+//    - harp (arpeggio): precomputed Karplus-Strong plucked string
+//    - strings (pad): detuned saws with a slow attack
+//    - cello (bass): heavily filtered saw
+//    - deep skin drums and a soft tambourine
+//  Everything goes through a castle-hall reverb.
 // ============================================================
 
-const TEMPO = 88;                         // negras por minuto
-const EIGHTH = 60 / TEMPO / 2;            // duración de una corchea (s)
+const TEMPO = 88;                         // quarter notes per minute
+const EIGHTH = 60 / TEMPO / 2;            // length of an eighth note (s)
 const BAR = EIGHTH * 8;
-const LOOKAHEAD = 0.25;                   // se programa con este margen
-const VOLUME = 0.42;                      // relativo al volumen general
+const LOOKAHEAD = 0.25;                   // scheduled this far ahead
+const VOLUME = 0.42;                      // relative to the overall volume
 const STORAGE_KEY = 'sg-music';
 
 const hz = (midi: number) => 440 * Math.pow(2, (midi - 69) / 12);
 
-// --- acordes: nota del bajo y tríada del arpegio
+// --- chords: bass note and arpeggio triad
 const CH = {
   Dm: { bass: 38, arp: [62, 65, 69] },
   Bb: { bass: 34, arp: [58, 62, 65] },
@@ -30,7 +30,7 @@ const CH = {
 };
 type Chord = keyof typeof CH;
 
-// --- melodía: [nota MIDI (-1 = silencio), duración en corcheas]; cada compás suma 8
+// --- melody: [MIDI note (-1 = rest), length in eighths]; each bar adds up to 8
 type Bar = { chord: Chord; notes: [number, number][] };
 const A: Bar[] = [
   { chord: 'Dm', notes: [[69, 2], [74, 2], [76, 1], [77, 1], [76, 2]] },
@@ -46,10 +46,10 @@ const B: Bar[] = [
 ];
 const A2: Bar[] = [A[0], A[1], A[2], { chord: 'Dm', notes: [[74, 6], [-1, 2]] }];
 const SONG: Bar[] = [...A, ...B, ...A, ...A2];
-/** En la primera vuelta de la parte A la flauta descansa y solo suenan arpa y cuerdas (intro). */
+/** On the first pass of part A the flute rests and only harp and strings play (intro). */
 const INTRO_BARS = 4;
 
-/** Arpegio del arpa en corcheas: índices sobre [tríada..., tónica una octava arriba]. */
+/** Harp arpeggio in eighths: indices into [triad..., tonic an octave up]. */
 const HARP_PATTERN = [0, 1, 2, 3, 2, 1, 2, 1];
 
 export class Music {
@@ -65,14 +65,14 @@ export class Music {
   onChange: (on: boolean) => void = () => {};
 
   constructor() {
-    try { this.enabled = localStorage.getItem(STORAGE_KEY) !== '0'; } catch { /* sin almacenamiento */ }
+    try { this.enabled = localStorage.getItem(STORAGE_KEY) !== '0'; } catch { /* no storage */ }
   }
 
   attach(ctx: AudioContext, dest: AudioNode) {
     this.ctx = ctx;
     this.out = ctx.createGain();
     this.out.gain.value = this.enabled ? VOLUME : 0;
-    // reverberación de sala: respuesta al impulso generada (ruido que se apaga en ~2,4 s)
+    // hall reverb: generated impulse response (noise that fades out in ~2.4 s)
     const rev = ctx.createConvolver(), wet = ctx.createGain();
     rev.buffer = this.makeImpulse(2.4);
     wet.gain.value = 0.35;
@@ -84,7 +84,7 @@ export class Music {
     const d = this.noise.getChannelData(0);
     for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
 
-    // cuerdas del arpa: una por cada nota que se va a usar
+    // harp strings: one for each note that will be used
     for (const c of Object.values(CH)) for (const n of [...c.arp, c.arp[0] + 12]) {
       if (!this.strings.has(n)) this.strings.set(n, this.pluck(hz(n)));
     }
@@ -95,12 +95,12 @@ export class Music {
 
   toggle() {
     this.enabled = !this.enabled;
-    try { localStorage.setItem(STORAGE_KEY, this.enabled ? '1' : '0'); } catch { /* nada */ }
+    try { localStorage.setItem(STORAGE_KEY, this.enabled ? '1' : '0'); } catch { /* nothing */ }
     if (this.ctx) this.out.gain.setTargetAtTime(this.enabled ? VOLUME * this.volume : 0, this.ctx.currentTime, 0.1);
     this.onChange(this.enabled);
   }
 
-  /** Volumen de la música (0..1) relativo a su volumen normal. */
+  /** Music volume (0..1) relative to its normal volume. */
   volume = 1;
   setVolume(v: number) {
     this.volume = v;
@@ -109,11 +109,11 @@ export class Music {
 
   dispose() { clearInterval(this.timer); }
 
-  /** Programa los compases que empiezan dentro del margen de anticipación. */
+  /** Schedule the bars that start within the lookahead window. */
   private schedule() {
     const ctx = this.ctx;
     if (!ctx || ctx.state !== 'running') return;
-    // si la pestaña estuvo parada y nos quedamos atrás, se retoma desde ahora
+    // if the tab was paused and we fell behind, resume from now
     if (this.nextBarT < ctx.currentTime - 0.1) this.nextBarT = ctx.currentTime + 0.05;
     while (this.nextBarT < ctx.currentTime + LOOKAHEAD) {
       if (this.enabled) this.playBar(this.bar, this.nextBarT);
@@ -128,7 +128,7 @@ export class Music {
     const ch = CH[bar.chord];
     const intro = this.loops === 0 && index < INTRO_BARS;
 
-    // flauta
+    // flute
     if (!intro) {
       let t = t0;
       for (const [n, len] of bar.notes) {
@@ -136,18 +136,18 @@ export class Music {
         t += len * EIGHTH;
       }
     }
-    // arpa
+    // harp
     const harp = [...ch.arp, ch.arp[0] + 12];
     for (let i = 0; i < 8; i++) {
       const accent = i === 0 || i === 4 ? 1 : 0.7;
       this.harp(t0 + i * EIGHTH, harp[HARP_PATTERN[i]], 0.16 * accent);
     }
-    // cuerdas: el acorde entero, una octava abajo, durante todo el compás
+    // strings: the whole chord, an octave down, for the entire bar
     for (const n of ch.arp) this.pad(t0, hz(n - 12), BAR, 0.022);
-    // chelo: blancas sobre la tónica (y la quinta en la segunda mitad)
+    // cello: half notes on the tonic (and the fifth in the second half)
     this.cello(t0, hz(ch.bass), EIGHTH * 4, 0.1);
     this.cello(t0 + EIGHTH * 4, hz(ch.bass + 7), EIGHTH * 4, 0.08);
-    // percusión: tambor grave en 1, más suave en 3 y repique al final; pandereta en 2 y 4
+    // percussion: deep drum on 1, softer on 3 and a fill at the end; tambourine on 2 and 4
     if (!intro) {
       this.drum(t0, 0.3);
       this.drum(t0 + EIGHTH * 4, 0.18);
@@ -158,10 +158,10 @@ export class Music {
   }
 
   // ------------------------------------------------------------
-  //  Instrumentos
+  //  Instruments
   // ------------------------------------------------------------
 
-  /** Flauta: entrada suave con un poco de soplido, vibrato que llega tarde en las notas largas. */
+  /** Flute: soft attack with a little breath, vibrato that comes in late on long notes. */
   private flute(t: number, f: number, dur: number, vol: number) {
     const ctx = this.ctx!;
     const g = ctx.createGain(), lp = ctx.createBiquadFilter();
@@ -185,7 +185,7 @@ export class Music {
     o1.connect(g); o2.connect(g2).connect(g);
     g.connect(lp).connect(this.out);
     o1.start(t); o2.start(t); o1.stop(t + dur + 0.1); o2.stop(t + dur + 0.1);
-    // soplido al atacar la nota
+    // breath at the start of the note
     const s = ctx.createBufferSource(), bp = ctx.createBiquadFilter(), sg = ctx.createGain();
     s.buffer = this.noise;
     bp.type = 'bandpass'; bp.frequency.value = f * 2; bp.Q.value = 3;
@@ -195,7 +195,7 @@ export class Music {
     s.start(t, Math.random() * 0.2); s.stop(t + 0.1);
   }
 
-  /** Arpa: reproduce la cuerda pulsada precalculada. */
+  /** Harp: plays the precomputed plucked string. */
   private harp(t: number, midi: number, vol: number) {
     const str = this.strings.get(midi);
     if (!str) return;
@@ -208,7 +208,7 @@ export class Music {
     s.start(t);
   }
 
-  /** Colchón de cuerdas: dos sierras desafinadas, filtradas, que entran y salen despacio. */
+  /** String pad: two detuned, filtered saws that fade in and out slowly. */
   private pad(t: number, f: number, dur: number, vol: number) {
     const ctx = this.ctx!;
     const g = ctx.createGain(), lp = ctx.createBiquadFilter();
@@ -226,7 +226,7 @@ export class Music {
     lp.connect(g).connect(this.out);
   }
 
-  /** Chelo: sierra con filtro muy cerrado, arco suave. */
+  /** Cello: saw with a very closed filter, gentle bowing. */
   private cello(t: number, f: number, dur: number, vol: number) {
     const ctx = this.ctx!;
     const o = ctx.createOscillator(), g = ctx.createGain(), lp = ctx.createBiquadFilter();
@@ -240,7 +240,7 @@ export class Music {
     o.start(t); o.stop(t + dur + 0.02);
   }
 
-  /** Tambor de piel grave (tipo bodhrán / timbal). */
+  /** Deep skin drum (bodhrán / kettledrum style). */
   private drum(t: number, vol: number) {
     const ctx = this.ctx!;
     const o = ctx.createOscillator(), g = ctx.createGain();
@@ -251,7 +251,7 @@ export class Music {
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
     o.connect(g).connect(this.out);
     o.start(t); o.stop(t + 0.37);
-    // golpe de la mano sobre la piel
+    // the hand striking the skin
     const s = ctx.createBufferSource(), lp = ctx.createBiquadFilter(), sg = ctx.createGain();
     s.buffer = this.noise;
     lp.type = 'lowpass'; lp.frequency.value = 600;
@@ -261,7 +261,7 @@ export class Music {
     s.start(t, Math.random() * 0.2); s.stop(t + 0.08);
   }
 
-  /** Pandereta muy suave. */
+  /** Very soft tambourine. */
   private shaker(t: number, vol: number) {
     const ctx = this.ctx!;
     const s = ctx.createBufferSource(), hp = ctx.createBiquadFilter(), g = ctx.createGain();
@@ -275,10 +275,10 @@ export class Music {
   }
 
   // ------------------------------------------------------------
-  //  Precálculo
+  //  Precomputation
   // ------------------------------------------------------------
 
-  /** Cuerda pulsada (Karplus-Strong). La afinación exacta se corrige con playbackRate. */
+  /** Plucked string (Karplus-Strong). Exact tuning is corrected with playbackRate. */
   private pluck(f: number) {
     const ctx = this.ctx!;
     const sr = ctx.sampleRate;
@@ -286,12 +286,12 @@ export class Music {
     const len = Math.floor(sr * 1.8);
     const buf = ctx.createBuffer(1, len, sr);
     const y = buf.getChannelData(0);
-    // excitación: ruido suavizado (pulsación con la yema, no con púa)
+    // excitation: smoothed noise (plucked with a fingertip, not a pick)
     let prev = 0;
     for (let i = 0; i < N; i++) { prev = prev * 0.5 + (Math.random() * 2 - 1) * 0.5; y[i] = prev; }
     const decay = 0.996;
     for (let i = N; i < len; i++) y[i] = decay * 0.5 * (y[i - N] + y[Math.max(0, i - N - 1)]);
-    // normaliza y apaga suavemente el final
+    // normalize and gently fade out the end
     let peak = 0;
     for (let i = 0; i < len; i++) peak = Math.max(peak, Math.abs(y[i]));
     const fade = Math.floor(sr * 0.2);
@@ -299,11 +299,11 @@ export class Music {
       y[i] /= peak || 1;
       if (i > len - fade) y[i] *= (len - i) / fade;
     }
-    // el bucle de N+0,5 muestras suena a sr/(N+0,5)
+    // the N+0.5-sample loop sounds at sr/(N+0.5)
     return { buf, rate: f * (N + 0.5) / sr };
   }
 
-  /** Respuesta al impulso estéreo para la reverberación. */
+  /** Stereo impulse response for the reverb. */
   private makeImpulse(seconds: number) {
     const ctx = this.ctx!;
     const len = Math.floor(ctx.sampleRate * seconds);

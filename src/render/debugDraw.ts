@@ -1,7 +1,7 @@
 // ============================================================
-//  Dibujo de depuración (menú de desarrollo): colisiones, alcances
-//  y caminos de los ayudantes, con líneas sobre el suelo.
-//  Una sola malla de líneas que se rellena cada fotograma.
+//  Debug drawing (dev menu): colliders, ranges and helper paths,
+//  as lines on the ground.
+//  A single line mesh refilled every frame.
 // ============================================================
 import * as THREE from 'three';
 import { BASE, CASTLE_HALF, HELPERS, PLAYER, PLAYER_RADIUS } from '../config';
@@ -11,8 +11,8 @@ import type { GameState } from '../game/types';
 export interface DebugOptions { colliders: boolean; ranges: boolean; paths: boolean }
 
 const MAX_SEGMENTS = 60000;
-const SEG = 24;            // segmentos por círculo
-const Y = 0.06;            // altura de las líneas (justo sobre el suelo)
+const SEG = 24;            // segments per circle
+const Y = 0.06;            // line height (just above the ground)
 
 const C = {
   solid: new THREE.Color('#ff3b3b'),
@@ -38,7 +38,7 @@ export class DebugDraw {
   constructor(scene: THREE.Scene) {
     this.geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage));
     this.geo.setAttribute('color', new THREE.BufferAttribute(this.col, 3).setUsage(THREE.DynamicDrawUsage));
-    // toneMapped: false para que el filtro de color de la escena (ACES) no las deje grises
+    // toneMapped: false so the scene's color filter (ACES) doesn't turn them grey
     const mat = new THREE.LineBasicMaterial({ vertexColors: true, depthTest: false, transparent: true, opacity: 0.95, toneMapped: false });
     this.lines = new THREE.LineSegments(this.geo, mat);
     this.lines.frustumCulled = false;
@@ -57,7 +57,7 @@ export class DebugDraw {
     if (o.colliders) {
       for (const s of G.solids) {
         if (!s.hx && !s.hy) { this.circle(s.x, s.y, s.r, C.solid); continue; }
-        // cápsula: un círculo en cada punta y los dos lados rectos
+        // capsule: a circle at each end and the two straight sides
         const hx = s.hx ?? 0, hy = s.hy ?? 0, l = Math.hypot(hx, hy), px = -hy / l * s.r, py = hx / l * s.r;
         this.circle(s.x + hx, s.y + hy, s.r, C.solid, 12);
         this.circle(s.x - hx, s.y - hy, s.r, C.solid, 12);

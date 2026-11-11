@@ -3,12 +3,12 @@ dist/
 logs/
 vendor/
 
-# sistema
+# system
 .DS_Store
 Thumbs.db
 *.log
-# ajustes locales de Claude Code
+# local Claude Code settings
 .claude/settings.local.json
 
-# variables locales de prueba (no se suben)
+# local test variables (not committed)
 .env*.local

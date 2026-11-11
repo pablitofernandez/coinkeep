@@ -1,13 +1,13 @@
 // ============================================================
-//  Telemetría anónima de partidas (solo en la versión publicada).
-//  Envía a Supabase (tabla game_logs, ver supabase/game_logs.sql) el
-//  mismo registro por oleadas que devlog.ts guarda en local, para
-//  equilibrar la dificultad con partidas reales.
+//  Anonymous gameplay telemetry (published version only).
+//  Sends to Supabase (game_logs table, see supabase/schema.sql) the
+//  same per-wave log that devlog.ts stores locally, to balance
+//  the difficulty with real games.
 //
-//  - Al acabar cada oleada: solo las oleadas nuevas (filas pequeñas).
-//  - Al perder: la última oleada y el resultado final.
-//  - Al cerrar o dejar la pestaña: dónde lo dejó (para saber cuándo abandona la gente).
-//  Sin nombres ni datos personales: un id aleatorio por partida y otro por navegador.
+//  - At the end of each wave: only the new waves (small rows).
+//  - On losing: the last wave and the final result.
+//  - On closing or leaving the tab: where the player stopped (to learn when people quit).
+//  No names or personal data: a random id per game and another per browser.
 // ============================================================
 import type { GameState } from './game/types';
 import { SUPABASE } from './leaderboard';
@@ -29,7 +29,7 @@ function playerId() {
   } catch { return uuid(); }
 }
 
-/** Sistema aproximado (sin el userAgent completo). */
+/** Approximate OS (without the full userAgent). */
 function platform() {
   const ua = navigator.userAgent;
   if (/iPhone|iPod/.test(ua)) return 'iPhone';
@@ -47,23 +47,23 @@ export class Telemetry {
   private player = ENABLED ? playerId() : '';
   private session = '';
   private seq = 0;
-  private sentWaves = 0;      // oleadas ya enviadas de esta partida
-  private ended = true;       // la partida ya mandó su final (o no hay partida)
-  private lastT = -1;         // segundo de partida del último envío (no repetir «left» sin novedades)
+  private sentWaves = 0;      // waves of this game already sent
+  private ended = true;       // the game already sent its ending (or there is no game)
+  private lastT = -1;         // game second of the last send (don't repeat "left" with nothing new)
   private G: GameState | null = null;
 
   constructor() {
     if (!ENABLED) return;
-    // al cerrar la pestaña o pasar a otra app (en el móvil no siempre llega «pagehide»)
+    // on closing the tab or switching to another app (on mobile "pagehide" doesn't always fire)
     const leave = () => this.left();
     window.addEventListener('pagehide', leave);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') leave(); });
   }
 
-  /** Empieza una partida nueva. */
+  /** Start a new game. */
   start(G: GameState) {
     if (!ENABLED) return;
-    this.left();   // si la anterior quedó a medias
+    this.left();   // in case the previous one was left unfinished
     this.G = G;
     this.session = uuid();
     this.seq = 0;
@@ -72,19 +72,19 @@ export class Telemetry {
     this.ended = false;
   }
 
-  /** Llamar cada fotograma: envía al acabar una oleada y al perder. */
+  /** Call every frame: sends when a wave ends and on losing. */
   update(G: GameState) {
     if (!ENABLED || this.ended || G !== this.G) return;
     if (G.over) { this.send('over'); this.ended = true; return; }
     if (G.stats.waves.length > this.sentWaves) this.send('wave');
   }
 
-  /** La partida se queda a medias (cierra la página, vuelve al menú…). */
+  /** The game is left unfinished (page closed, back to the menu…). */
   left() {
     if (!ENABLED || this.ended || !this.G) return;
-    // en el móvil «hidden» también llega al cambiar de app; si vuelve, la partida sigue y se enviará después
-    if (this.G.wave === 0) return;   // ni siquiera empezó la primera oleada
-    if (Math.round(this.G.t) === this.lastT) return;   // nada nuevo desde el último envío
+    // on mobile "hidden" also fires when switching apps; if the player comes back, the game goes on and is sent later
+    if (this.G.wave === 0) return;   // the first wave hadn't even started
+    if (Math.round(this.G.t) === this.lastT) return;   // nothing new since the last send
     this.send('left');
   }
 
@@ -108,7 +108,7 @@ export class Telemetry {
       cheats: G.cheated,
       data: {
         waves,
-        // foto del momento (también con la oleada en curso a medias)
+        // snapshot of the moment (including the wave in progress)
         now: {
           baseHp: Math.ceil(G.base.hp), baseMax: G.base.max, coins: G.player.coins,
           towers: G.buildings.map(b => (b.type === 'archer' ? 'A' : 'C') + b.level).join(' '),
@@ -121,12 +121,12 @@ export class Telemetry {
         },
       },
     };
-    // keepalive: el envío sigue aunque se esté cerrando la página
+    // keepalive: the request goes through even while the page is closing
     fetch(`${SUPABASE.url}/rest/v1/game_logs`, {
       method: 'POST',
       headers: SUPABASE.headers({ 'Content-Type': 'application/json', Prefer: 'return=minimal' }),
       body: JSON.stringify(row),
       keepalive: true,
-    }).catch(() => { /* sin conexión: se pierde este trozo, no pasa nada */ });
+    }).catch(() => { /* offline: this chunk is lost, no big deal */ });
   }
 }

@@ -4,13 +4,13 @@ html, body {
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 #app canvas { display: block; }
-/* botones y casillas: sin zoom por doble toque en el móvil, pero sin perder clics rápidos (ver preventBrowserZoom) */
+/* buttons and inputs: no double-tap zoom on mobile, without losing quick clicks (see preventBrowserZoom) */
 button, input, select, summary { touch-action: manipulation; }
-/* z-index propio: las etiquetas traen z-index altos y si no se pintarían encima del menú de desarrollo */
+/* own z-index: labels come with high z-indexes and would otherwise be drawn over the developer menu */
 .labels { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 1; }
 .labels * { pointer-events: none; }
-/* cada etiqueta en su propia capa: al moverse con la cámara (posiciones con decimales)
-   el navegador dejaba rastros de un píxel de sus bordes (p. ej. líneas verdes de la barra de vida) */
+/* each label on its own layer: when moving with the camera (fractional positions)
+   the browser left one-pixel trails of their edges (e.g. green lines from the health bar) */
 .labels > * { will-change: transform; backface-visibility: hidden; }
 
 /* ---------- HUD ---------- */
@@ -76,7 +76,7 @@ button, input, select, summary { touch-action: manipulation; }
 .go-msg { min-height: 18px; margin: 4px 0; font-size: 14px; color: #ffe9a8; }
 .go-buttons { display: flex; gap: 10px; margin-top: 12px; }
 
-/* ---------- botones de menú, dificultad y clasificación ---------- */
+/* ---------- menu, difficulty and leaderboard buttons ---------- */
 .menu-btn {
   pointer-events: auto; cursor: pointer; border: 2px solid rgba(255,255,255,.55); border-radius: 12px;
   background: rgba(20,24,14,.55); color: #fff; font-weight: 800; font-size: 15px; padding: 9px 16px;
@@ -108,7 +108,7 @@ button, input, select, summary { touch-action: manipulation; }
 .board .empty, .go-list .empty { opacity: .7; justify-content: center; }
 .go-list { width: min(92vw, 340px); text-align: left; }
 
-/* ---------- etiquetas 3D ---------- */
+/* ---------- 3D labels ---------- */
 .pad-label { text-align: center; color: #fff; text-shadow: 0 1px 2px #000, 0 0 4px #000; line-height: 1.1; transform: translateY(18px); }
 .pad-label .icon { font-size: 20px; }
 .pad-label .cost { font-size: 16px; font-weight: 800; color: #ffd34d; }
@@ -117,14 +117,14 @@ button, input, select, summary { touch-action: manipulation; }
 .pad-label.affordable .cost { color: #7dff7a; animation: aff-pulse .7s ease-in-out infinite alternate; }
 @keyframes aff-pulse { from { transform: scale(1); } to { transform: scale(1.18); } }
 
-/* flecha en el borde hacia una parcela que puedes pagar */
+/* edge arrow pointing to a plot you can afford */
 .pad-arrow {
   position: fixed; left: 0; top: 0; width: 0; height: 0; pointer-events: none; z-index: 5;
   border-left: 14px solid transparent; border-right: 14px solid transparent; border-bottom: 26px solid #ffd34d;
   filter: drop-shadow(0 0 4px rgba(0,0,0,.7));
 }
 
-/* destello rojo en los bordes cuando atacan el castillo */
+/* red flash on the edges when the castle is attacked */
 .pad-label.small { transform: translateY(12px); }
 .pad-label.small .icon { font-size: 14px; }
 .pad-label.small .cost { font-size: 13px; }
@@ -142,7 +142,7 @@ button, input, select, summary { touch-action: manipulation; }
 .hpbar.big { width: 70px; height: 7px; }
 .hpbar.big div { background: #4caf50; }
 
-/* ---------- menú de desarrollador (solo en modo dev) ---------- */
+/* ---------- developer menu (dev mode only) ---------- */
 .dev-panel {
   position: fixed; top: 0; right: 0; bottom: 0; width: 380px; max-width: 100vw; z-index: 50;
   background: rgba(18, 22, 30, .9); color: #e8ecf3; font-size: 13px; box-shadow: -4px 0 16px rgba(0,0,0,.4);
@@ -179,12 +179,12 @@ button, input, select, summary { touch-action: manipulation; }
   .dev-btn { padding: 8px 10px; font-size: 13px; }
 }
 
-/* ---------- pantalla de título ---------- */
+/* ---------- title screen ---------- */
 #title {
   position: fixed; inset: 0; z-index: 30; pointer-events: none;
   display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 6px;
   padding: max(5vh, 20px) 16px 16px; text-align: center; color: #fff;
-  /* viñeta: oscurece los bordes y deja ver la escena en el centro */
+  /* vignette: darkens the edges and leaves the scene visible in the centre */
   background: linear-gradient(rgba(10,14,8,.55), rgba(10,14,8,0) 38%), radial-gradient(ellipse at 50% 60%, rgba(0,0,0,0) 40%, rgba(10,14,8,.5) 100%);
   animation: title-in .9s ease-out both;
 }
@@ -195,7 +195,7 @@ button, input, select, summary { touch-action: manipulation; }
 
 .logo { margin: 0; line-height: 0; }
 .logo img {
-  width: min(92vw, 640px, 90vh); height: auto;   /* como mucho ~30% del alto (móvil apaisado) */
+  width: min(92vw, 640px, 90vh); height: auto;   /* at most ~30% of the height (landscape phone) */
   filter: drop-shadow(0 10px 18px rgba(0,0,0,.55));
   animation: logo-float 4s ease-in-out infinite;
 }
@@ -213,6 +213,35 @@ button, input, select, summary { touch-action: manipulation; }
   position: absolute; bottom: 14px; left: 0; right: 0; margin: 0;
   font-size: 12px; opacity: .8; text-shadow: 0 1px 3px #000;
 }
-/* en la carga y en la portada no se ve el HUD (salvo el texto de «Cargando…», que vive dentro) */
+/* the HUD is hidden while loading and on the title screen (except the "Loading…" text, which lives inside it) */
 body.title-mode #hud { background: none; }
 body.title-mode #hud > :not(#loading), body.title-mode #help { display: none; }
+
+/* language picker (top-right corner of the title screen) */
+.lang { position: absolute; top: 12px; right: 12px; display: flex; gap: 4px; }
+.lang .menu-btn { padding: 4px 9px; font-size: 13px; border-radius: 8px; border-width: 1px; }
+.lang .menu-btn.on { background: #ffd34d; color: #3a2a05; border-color: #fff2a8; text-shadow: none; }
+
+/* "What's new" (changelog) panel on the title screen */
+.menu-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+#show-news { position: relative; }
+.news-dot {
+  position: absolute; top: -4px; right: -4px; width: 12px; height: 12px; border-radius: 50%;
+  background: #ff4d4d; border: 2px solid #fff; box-shadow: 0 0 6px rgba(255,77,77,.8);
+}
+.news-dot.hidden { display: none; }
+.board.news { width: min(92vw, 460px); }
+.news-body { font-size: 14px; line-height: 1.45; }
+.news-body h3 { margin: 12px 0 2px; font-size: 16px; color: #ffd34d; }
+.news-body h3:first-child { margin-top: 0; }
+.news-body h4 { margin: 8px 0 2px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; opacity: .75; }
+.news-body p { margin: 4px 0; }
+.news-body ul { margin: 2px 0; padding-left: 18px; }
+.news-body li { margin: 2px 0; }
+.news-body li.sub { margin-left: 16px; list-style: circle; }
+/* the leaderboard rows are flex; changelog items are plain list items */
+.board .news-body li { display: list-item; padding: 0; border: none; font-size: inherit; }
+/* panels above the blinking "tap to play" line */
+.board { position: relative; z-index: 2; }
+/* the panels are see-through: hide the blinking line while one is open */
+#title:has(.board:not(.hidden)) .start { visibility: hidden; }

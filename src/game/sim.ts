@@ -1,9 +1,10 @@
 // ============================================================
-//  Simulación pura: no sabe nada de Three.js ni del DOM.
-//  El render lee el estado y consume G.events.
+//  Pure simulation: knows nothing about Three.js or the DOM.
+//  The renderer reads the state and consumes G.events.
 // ============================================================
+import { t } from '../i18n';
 import {
-  BASE, BASE_HALF, BASE_HP, CASTLE_HALF, PLAYER_RADIUS, FORGE_MULT, HELPERS, PAD_DEFS, PAD_INFO, PLAYER, PROP_KINDS, PROP_SOLID,
+  BASE, BASE_HALF, BASE_HP, CASTLE_HALF, PLAYER_RADIUS, FORGE_MULT, HELPERS, PAD_DEFS, PLAYER, PROP_KINDS, PROP_SOLID,
   REPEAT_COST_MULT, REPEAT_COST_MULT_BY,
   TOWER_CASTLE_MARGIN, TOWER_STATS, TOWER_UPGRADE, WAVES, WORLD, enemyStats, ENEMY_KINDS, SHAMAN, pickEnemyKind, waveCount,
 } from '../config';
@@ -46,10 +47,10 @@ export function createGame(difficulty: Difficulty = 'normal'): GameState {
 }
 
 // ------------------------------------------------------------
-//  Decorado sólido: árboles, rocas, tocones y troncos
+//  Solid scenery: trees, rocks, stumps and logs
 // ------------------------------------------------------------
 export function placeProps(G: GameState) {
-  // zonas reservadas: parcelas, y alrededor de las torres sus mesas y parcelas de mejora; casetas; salida del jugador
+  // reserved areas: pads, and around towers their tables and upgrade pads; kennels/huts; player start
   const keep: Solid[] = [{ x: PLAYER.start.x, y: PLAYER.start.y, r: 1.2 }];
   for (const d of PAD_DEFS) {
     keep.push({ x: d.x, y: d.y, r: d.type === 'archer' || d.type === 'cannon' ? 3.1 : 1.5 });
@@ -58,7 +59,7 @@ export function placeProps(G: GameState) {
   }
   for (const kind of PROP_KINDS) {
     for (let n = 0; n < kind.count; n++) {
-      // unos cuantos intentos por elemento; si no hay sitio, se omite
+      // a few attempts per item; if there's no room, it's skipped
       for (let tries = 0; tries < 20; tries++) {
         const a = Math.random() * Math.PI * 2;
         const r = Math.sqrt(kind.r0 * kind.r0 + Math.random() * (kind.r1 * kind.r1 - kind.r0 * kind.r0));
@@ -70,7 +71,7 @@ export function placeProps(G: GameState) {
         const parts = propSolids(prop);
         const reach = Math.max(0.3, ...parts.map(s => s.r + Math.hypot(s.hx ?? 0, s.hy ?? 0)));
         if (keep.some(k => Math.hypot(k.x - prop.x, k.y - prop.y) < k.r + reach)) continue;
-        // entre obstáculos se deja hueco para pasar (al menos un cuerpo de zombi gordo)
+        // leave a gap between obstacles to walk through (at least one fat zombie's body)
         if (G.solids.some(s => parts.some(p => solidGap(s, p) < 0.75))) continue;
         G.props.push(prop);
         G.solids.push(...parts);
@@ -80,16 +81,16 @@ export function placeProps(G: GameState) {
   }
 }
 
-/** Círculos sólidos de un elemento del decorado, ya girados y escalados. */
+/** Solid circles of a scenery item, already rotated and scaled. */
 function propSolids(p: Prop): Solid[] {
-  // el modelo se gira `rot` en torno al eje vertical: su eje z local apunta a (sin rot, cos rot) en el plano
+  // the model is rotated `rot` around the vertical axis: its local z axis points to (sin rot, cos rot) on the plane
   const sx = Math.sin(p.rot), sy = Math.cos(p.rot);
   return (PROP_SOLID[p.model] ?? []).map(c => c.half
     ? { x: p.x, y: p.y, r: c.r * p.scale, hx: sx * c.half * p.scale, hy: sy * c.half * p.scale }
     : { x: p.x, y: p.y, r: c.r * p.scale });
 }
 
-/** Punto del eje de un sólido más cercano a p (el centro si es un círculo; un punto del segmento si es una cápsula). */
+/** Point on a solid's axis closest to p (the centre if it's a circle; a point on the segment if it's a capsule). */
 function solidCore(s: Solid, p: Vec): Vec {
   if (!s.hx && !s.hy) return s;
   const hx = s.hx ?? 0, hy = s.hy ?? 0;
@@ -97,30 +98,30 @@ function solidCore(s: Solid, p: Vec): Vec {
   return { x: s.x + hx * t, y: s.y + hy * t };
 }
 
-/** Distancia entre dos sólidos (de borde a borde; aproximada para cápsulas). */
+/** Distance between two solids (edge to edge; approximate for capsules). */
 function solidGap(a: Solid, b: Solid) {
   const pa = solidCore(a, b), pb = solidCore(b, pa);
   return Math.hypot(pa.x - pb.x, pa.y - pb.y) - a.r - b.r;
 }
 
 /**
- * Saca a alguien de los obstáculos. Si iba (en la dirección unitaria dir, avanzando `step` este paso)
- * contra uno, además lo desliza por el lado para que lo rodee en vez de quedarse atascado.
- * `side` (+1 / -1) decide el lado cuando va justo de frente.
+ * Pushes someone out of obstacles. If they were heading into one (in unit direction dir, moving `step` this tick),
+ * it also slides them sideways so they go around it instead of getting stuck.
+ * `side` (+1 / -1) picks the side when heading straight into it.
  */
 function avoidSolids(G: GameState, e: Vec, r: number, dirX = 0, dirY = 0, step = 0, side = 1) {
   for (const s of G.solids) {
-    // descarte rápido con la caja que envuelve al sólido
+    // quick rejection with the solid's bounding box
     const ext = s.r + r + Math.abs(s.hx ?? 0) + Math.abs(s.hy ?? 0);
     if (Math.abs(e.x - s.x) >= ext || Math.abs(e.y - s.y) >= ext) continue;
-    // en una cápsula se empuja desde el punto más cercano de su eje: así se resbala a lo largo del tronco
+    // on a capsule, push from the nearest point on its axis: that way you slide along the log
     const q = solidCore(s, e);
     const dx = e.x - q.x, dy = e.y - q.y, min = s.r + r;
     const d = Math.hypot(dx, dy);
     if (d >= min) continue;
     const nx = d > 1e-4 ? dx / d : 1, ny = d > 1e-4 ? dy / d : 0;
     e.x = q.x + nx * min; e.y = q.y + ny * min;
-    // si el obstáculo le tapa el camino, rodea: paso lateral perpendicular a la normal
+    // if the obstacle blocks the way, go around: sidestep perpendicular to the normal
     const into = -(dirX * nx + dirY * ny);
     if (into > 0.2) {
       let tx = -ny, ty = nx;
@@ -141,15 +142,15 @@ function updateUnlocks(G: GameState) {
   for (const pad of G.pads) {
     if (!pad.active && !pad.done && pad.unlock <= G.built) {
       pad.active = true;
-      if (G.t > 0) text(G, pad.x, pad.y, '¡Nuevo!', '#7ff');
+      if (G.t > 0) text(G, pad.x, pad.y, t('float.new'), '#7ff');
     }
   }
 }
 
 // ------------------------------------------------------------
-//  Oleadas
+//  Waves
 // ------------------------------------------------------------
-/** Saca un enemigo. Por defecto sale del bosque, en un punto al azar del círculo que rodea la zona de juego. */
+/** Spawns an enemy. By default it comes out of the forest, at a random point on the circle around the play area. */
 export function spawnEnemy(G: GameState, boss: boolean, at?: Vec, kind?: EnemyKind) {
   G.stats.spawned++;
   const k: EnemyKind = boss ? 'zombie' : kind ?? pickEnemyKind(Math.max(1, G.wave));
@@ -167,21 +168,21 @@ export function spawnEnemy(G: GameState, boss: boolean, at?: Vec, kind?: EnemyKi
 
 function updateWaves(G: GameState, dt: number) {
   if (!G.dev.pauseWaves) G.waveTimer -= dt;
-  // oleada limpia del todo -> pausa corta antes de la siguiente
+  // wave fully cleared -> short pause before the next one
   if (G.wave > 0 && G.spawnLeft === 0 && G.enemies.length === 0 && G.waveTimer > WAVES.breakTime) {
     G.waveTimer = WAVES.breakTime;
-    text(G, G.player.x, G.player.y, '¡Oleada superada!', '#7f7', 20);
+    text(G, G.player.x, G.player.y, t('float.waveCleared'), '#7f7', 20);
     sfx(G, 'waveClear');
   }
   if (G.waveTimer <= 0) {
-    if (G.wave > 0) logWave(G);   // resumen de la oleada que termina
+    if (G.wave > 0) logWave(G);   // summary of the wave that's ending
     G.wave++;
     G.spawnLeft = waveCount(G.wave, G.difficulty);
     G.spawnTimer = 0;
     G.waveTimer = WAVES.interval;
     sfx(G, G.wave % WAVES.bossEvery === 0 ? 'boss' : 'wave');
-    if (G.wave % WAVES.bossEvery === 0) { spawnEnemy(G, true); text(G, G.player.x, G.player.y, '¡JEFE!', '#f55', 26); }
-    else text(G, G.player.x, G.player.y, 'Oleada ' + G.wave, '#ffd34d', 22);
+    if (G.wave % WAVES.bossEvery === 0) { spawnEnemy(G, true); text(G, G.player.x, G.player.y, t('float.boss'), '#f55', 26); }
+    else text(G, G.player.x, G.player.y, t('float.wave', { n: G.wave }), '#ffd34d', 22);
   }
   if (G.spawnLeft > 0) {
     G.spawnTimer -= dt;
@@ -194,7 +195,7 @@ function updateWaves(G: GameState, dt: number) {
 }
 
 // ------------------------------------------------------------
-//  Enemigos
+//  Enemies
 // ------------------------------------------------------------
 export function killEnemy(G: GameState, e: Enemy, byTower: Building | null, source: KillSource) {
   e.dead = true;
@@ -222,7 +223,7 @@ function damageEnemy(G: GameState, e: Enemy, dmg: number, tower: Building | null
   if (e.hp <= 0) killEnemy(G, e, tower, source);
 }
 
-/** Mago: cada pocos segundos cura a los enemigos que tiene cerca (y a sí mismo). */
+/** Mage: every few seconds heals the enemies near it (and itself). */
 function shamanCast(G: GameState, e: Enemy, dt: number) {
   e.cast -= dt;
   if (e.cast > 0) return;
@@ -265,14 +266,14 @@ function updateEnemies(G: GameState, dt: number) {
     const sp = e.speed * speedMult;
     e.x += dx / d * sp * dt;
     e.y += dy / d * sp * dt;
-    // árboles y rocas: los rodean (cada uno por su lado preferido, para que no se amontonen); los que vuelan pasan por encima
+    // trees and rocks: they go around them (each on its preferred side, so they don't pile up); flyers pass over
     if (!e.fly) avoidSolids(G, e, e.r * 0.8, dx / d, dy / d, sp * dt, e.id % 2 ? 1 : -1);
   }
-  // separación simple
+  // simple separation
   const es = G.enemies;
   for (let i = 0; i < es.length; i++) for (let j = i + 1; j < es.length; j++) {
     const a = es[i], b = es[j];
-    if (!a.fly !== !b.fly) continue;   // los que vuelan no chocan con los de tierra
+    if (!a.fly !== !b.fly) continue;   // flyers don't collide with ground enemies
     const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy), min = a.r + b.r;
     if (d > 0 && d < min) {
       const push = (min - d) / 2;
@@ -280,7 +281,7 @@ function updateEnemies(G: GameState, dt: number) {
       b.x += dx / d * push; b.y += dy / d * push;
     }
   }
-  // que nadie se meta dentro de la base ni de un obstáculo al empujarse
+  // make sure nobody gets pushed inside the base or an obstacle
   for (const e of es) {
     if (!e.fly) avoidSolids(G, e, e.r * 0.8);
     const ex = e.x - BASE.x, ey = e.y - BASE.y, lim = CASTLE_HALF + e.r;
@@ -293,7 +294,7 @@ function updateEnemies(G: GameState, dt: number) {
 }
 
 // ------------------------------------------------------------
-//  Jugador
+//  Player
 // ------------------------------------------------------------
 function updatePlayer(G: GameState, dt: number, dir: Vec) {
   const p = G.player;
@@ -303,33 +304,33 @@ function updatePlayer(G: GameState, dt: number, dir: Vec) {
   p.moving = Math.hypot(dir.x, dir.y) > 0.1;
   if (p.moving) { const m = Math.hypot(dir.x, dir.y); p.faceX = dir.x / m; p.faceY = dir.y / m; }
 
-  // colisiones con el castillo: es cuadrado y los torreones de las esquinas sobresalen,
-  // así que se usa una caja (con un círculo el jugador se metía en los torreones)
+  // collisions with the castle: it's square and the corner turrets stick out,
+  // so a box is used (with a circle the player got inside the turrets)
   pushOutOfCastle(p, CASTLE_SOLID);
-  // y con los edificios
+  // and with the buildings
   const solids = G.buildings.map(b => ({ x: b.x, y: b.y, r: 0.5 }));
   for (const h of G.helpers) solids.push({ x: h.home.x, y: h.home.y, r: h.kind === 'dog' ? 0.4 : 0.55 });
   for (const s of solids) {
     const dx = p.x - s.x, dy = p.y - s.y, d = Math.hypot(dx, dy), min = s.r + 0.3;
     if (d < min && d > 0) { p.x = s.x + dx / d * min; p.y = s.y + dy / d * min; }
   }
-  // árboles, rocas, tocones y troncos (si vas de frente contra uno, resbalas hacia un lado)
+  // trees, rocks, stumps and logs (if you walk straight into one, you slide to one side)
   const m = Math.hypot(dir.x, dir.y);
   if (m > 0.1) avoidSolids(G, p, PLAYER_RADIUS, dir.x / m, dir.y / m, speed * m * dt);
   else avoidSolids(G, p, PLAYER_RADIUS);
-  // no salir del claro
+  // don't leave the clearing
   const fx = p.x - BASE.x, fy = p.y - BASE.y, fd = Math.hypot(fx, fy);
   if (fd > WORLD.playRadius) { p.x = BASE.x + fx / fd * WORLD.playRadius; p.y = BASE.y + fy / fd * WORLD.playRadius; }
 
-  // ataque automático
+  // automatic attack
   p.cd -= dt;
   p.attackT = Math.max(0, p.attackT - dt);
   if (p.cd <= 0) {
-    // enemigo más cercano (distancia al borde de su cuerpo)
+    // nearest enemy (distance to the edge of its body)
     let best: Enemy | null = null, bd = Infinity;
     for (const e of G.enemies) { const d = dist(p, e) - e.r; if (d < bd) { bd = d; best = e; } }
     if (best && bd < PLAYER.sword.range) {
-      // espada: cuerpo a cuerpo, golpe instantáneo y fuerte
+      // sword: melee, instant and strong hit
       damageEnemy(G, best, p.swordDmg * G.towerMult * G.dev.playerDmg, null, 'sword');
       p.weapon = 'sword';
       p.cd = PLAYER.sword.cd;
@@ -337,7 +338,7 @@ function updatePlayer(G: GameState, dt: number, dir: Vec) {
       sfx(G, 'sword');
       p.target = { x: best.x, y: best.y };
     } else if (best && bd < PLAYER.bow.range) {
-      // arco: dispara una flecha (proyectil) más débil pero de largo alcance
+      // bow: fires an arrow (projectile), weaker but long-range
       const d = dist(p, best);
       G.shots.push({
         id: uid(), type: 'archer', x: p.x, y: p.y, z: 0.75, z0: 0.75, dist0: d,
@@ -352,7 +353,7 @@ function updatePlayer(G: GameState, dt: number, dir: Vec) {
     }
   }
 
-  // monedas del suelo (imán)
+  // ground coins (magnet)
   for (const c of G.drops) {
     if (c.z > 0.05 || c.age < 0.25) continue;
     const d = dist(p, c);
@@ -364,7 +365,7 @@ function updatePlayer(G: GameState, dt: number, dir: Vec) {
   }
   G.drops = G.drops.filter(c => !c.taken);
 
-  // mesas y parcelas
+  // tables and pads
   let onTable: Building | null = null;
   for (const b of G.buildings) if (b.table > 0 && Math.hypot(p.x - b.tx, p.y - b.ty) < 0.9) onTable = b;
   let onPad: Pad | null = null;
@@ -374,12 +375,12 @@ function updatePlayer(G: GameState, dt: number, dir: Vec) {
     const d = Math.hypot(p.x - pad.x, p.y - pad.y);
     if (d < (pad.small ? 0.6 : 0.85) && d < padD) { padD = d; onPad = pad; }
   }
-  // hay que quedarse un momento encima para empezar a pagar (evita gastos al pasar de largo)
+  // you have to stand on it for a moment before paying starts (avoids spending when just passing by)
   if (onPad && onPad.id === G.padDwellId) G.padDwell += dt;
   else { G.padDwellId = onPad ? onPad.id : -1; G.padDwell = 0; }
   if (onPad && G.padDwell < PLAYER.padDelay) onPad = null;
 
-  // truco «construir gratis»: la parcela se completa al pisarla, sin pagar
+  // "free build" cheat: the pad completes when stepped on, without paying
   if (G.dev.freeBuild && onPad && onPad.cool <= 0) {
     onPad.paid = onPad.cost;
     completePad(G, onPad);
@@ -417,7 +418,6 @@ function updatePlayer(G: GameState, dt: number, dir: Vec) {
 }
 
 export function completePad(G: GameState, pad: Pad) {
-  const info = PAD_INFO[pad.type];
   if (pad.type === 'archer' || pad.type === 'cannon') {
     pad.active = false;
     pad.done = true;
@@ -429,7 +429,7 @@ export function completePad(G: GameState, pad: Pad) {
     G.buildings.push(b);
     G.built++;
     G.events.push({ type: 'built', id: b.id });
-    text(G, pad.x, pad.y, info.label + (start > 1 ? ` Nv ${start}!` : '!'), '#7f7', 20);
+    text(G, pad.x, pad.y, start > 1 ? t('float.builtLevel', { name: t(`pad.${pad.type}`), n: start }) : t('float.built', { name: t(`pad.${pad.type}`) }), '#7f7', 20);
     addUpgradePad(G, b);
     updateUnlocks(G);
     return;
@@ -439,7 +439,7 @@ export function completePad(G: GameState, pad: Pad) {
     if (!b) return;
     b.level++;
     G.events.push({ type: 'towerUpgraded', id: b.id });
-    text(G, b.x, b.y, `Torre Nv ${b.level}`, '#7f7', 20);
+    text(G, b.x, b.y, t('float.tower', { n: b.level }), '#7f7', 20);
     pad.paid = 0;
     pad.level++;
     pad.cool = 1.0;
@@ -451,12 +451,12 @@ export function completePad(G: GameState, pad: Pad) {
   if (pad.type === 'power') {
     G.player.swordDmg *= PLAYER.powerMult;
     G.player.bowDmg *= PLAYER.powerMult;
-    text(G, pad.x, pad.y, `Espada ${(G.player.swordDmg * G.towerMult).toFixed(1)} · Ballesta ${(G.player.bowDmg * G.towerMult).toFixed(1)}`, '#7f7', 18);
+    text(G, pad.x, pad.y, t('float.power', { sword: (G.player.swordDmg * G.towerMult).toFixed(1), bow: (G.player.bowDmg * G.towerMult).toFixed(1) }), '#7f7', 18);
   }
   if (pad.type === 'repair') {
     G.base.max += 5; G.base.hp = G.base.max;
     G.castleLevel = Math.min(5, 1 + pad.level);
-    text(G, pad.x, pad.y, 'Base reparada', '#7f7', 20);
+    text(G, pad.x, pad.y, t('float.repaired'), '#7f7', 20);
   }
   if (pad.type === 'kennel' || pad.type === 'peon') {
     const kind: HelperKind = pad.type === 'kennel' ? 'dog' : 'peon';
@@ -465,7 +465,7 @@ export function completePad(G: GameState, pad: Pad) {
     const home = { x: pad.x + cfg.homeOffset.x, y: pad.y + cfg.homeOffset.y };
     const group = G.helpers.filter(x => x.kind === kind);
     for (const h of group) h.level = level;
-    // cada nivel trae una unidad más
+    // each level brings one more unit
     for (let i = group.length; i < cfg.count(level); i++) {
       G.helpers.push({
         id: uid(), kind, x: home.x + (i % 2 ? 0.4 : -0.4), y: home.y + 0.7, level, carry: 0, mode: 'idle', moving: false,
@@ -473,10 +473,10 @@ export function completePad(G: GameState, pad: Pad) {
       });
     }
     G.helperLevels[kind] = level;
-    if (level === 1) text(G, pad.x, pad.y, kind === 'dog' ? '¡Auuu! Tienes un lobo' : '¡Peón contratado!', '#7f7', 20);
-    else text(G, pad.x, pad.y, `${cfg.name} Nv ${level} · ${cfg.count(level)} unidades`, '#7f7', 18);
+    if (level === 1) text(G, pad.x, pad.y, t(kind === 'dog' ? 'float.wolf' : 'float.peon'), '#7f7', 20);
+    else text(G, pad.x, pad.y, t('float.helpers', { name: t(`helper.${kind}`), n: level, count: cfg.count(level) }), '#7f7', 18);
   }
-  if (pad.type === 'forge') { G.towerMult *= FORGE_MULT; text(G, pad.x, pad.y, 'Daño x' + G.towerMult.toFixed(2), '#7f7', 20); }
+  if (pad.type === 'forge') { G.towerMult *= FORGE_MULT; text(G, pad.x, pad.y, t('float.damage', { n: G.towerMult.toFixed(2) }), '#7f7', 20); }
   pad.paid = 0;
   pad.cost = Math.ceil(pad.cost * (REPEAT_COST_MULT_BY[pad.type] ?? REPEAT_COST_MULT));
   pad.cool = 1.2;
@@ -485,13 +485,13 @@ export function completePad(G: GameState, pad: Pad) {
 }
 
 // ------------------------------------------------------------
-//  Parcela de mejora de cada torre: busca un hueco libre al lado
+//  Upgrade pad for each tower: looks for a free spot next to it
 // ------------------------------------------------------------
 function addUpgradePad(G: GameState, b: Building) {
   const occupied: { x: number; y: number; r: number }[] = [];
   for (const d of PAD_DEFS) {
-    occupied.push({ x: d.x, y: d.y, r: 1.25 });                                   // parcelas (y torres futuras)
-    if (d.type === 'archer' || d.type === 'cannon') occupied.push({ x: d.x + 0.05, y: d.y + 1.05, r: 0.95 }); // sus mesas
+    occupied.push({ x: d.x, y: d.y, r: 1.25 });                                   // pads (and future towers)
+    if (d.type === 'archer' || d.type === 'cannon') occupied.push({ x: d.x + 0.05, y: d.y + 1.05, r: 0.95 }); // their tables
     if (d.type === 'kennel') occupied.push({ x: d.x + HELPERS.dog.homeOffset.x, y: d.y + HELPERS.dog.homeOffset.y, r: 1.1 });
     if (d.type === 'peon') occupied.push({ x: d.x + HELPERS.peon.homeOffset.x, y: d.y + HELPERS.peon.homeOffset.y, r: 1.2 });
   }
@@ -502,7 +502,7 @@ function addUpgradePad(G: GameState, b: Building) {
     Math.max(Math.abs(x - BASE.x), Math.abs(y - BASE.y)) > BASE_HALF + 0.75 &&
     occupied.every(o => Math.hypot(x - o.x, y - o.y) >= o.r);
 
-  // prueba posiciones alrededor de la torre, primero las más cercanas
+  // try positions around the tower, nearest first
   let spot: Vec | null = null;
   for (const r of [1.15, 1.4, 1.7]) {
     for (let k = 0; k < 16 && !spot; k++) {
@@ -520,7 +520,7 @@ function addUpgradePad(G: GameState, b: Building) {
   });
 }
 
-/** Estadísticas efectivas de una torre según su nivel y la mejora global. */
+/** Effective stats of a tower given its level and the global upgrade. */
 export function towerStats(G: GameState, b: Building) {
   const st = TOWER_STATS[b.type], lv = b.level - 1;
   return {
@@ -532,20 +532,20 @@ export function towerStats(G: GameState, b: Building) {
 }
 
 // ------------------------------------------------------------
-//  Torres y proyectiles
+//  Towers and projectiles
 // ------------------------------------------------------------
 function updateBuildings(G: GameState, dt: number) {
   for (const b of G.buildings) {
     const st = towerStats(G, b);
     b.cd -= dt;
     if (b.cd > 0) continue;
-    // 1) enemigo dentro de su alcance normal, el más cercano a la base
-    // 2) si no hay ninguno, cualquiera que esté atacando el castillo (todas las torres llegan al castillo)
+    // 1) enemy within its normal range, the one closest to the base
+    // 2) if there's none, any enemy attacking the castle (every tower reaches the castle)
     const castleReach = Math.hypot(b.x - BASE.x, b.y - BASE.y) + BASE_HALF + TOWER_CASTLE_MARGIN;
     let best: Enemy | null = null, bd = Infinity;
     let backup: Enemy | null = null, bk = Infinity;
     for (const e of G.enemies) {
-      if (e.fly && b.type === 'cannon') continue;   // las balas de cañón no alcanzan a los que vuelan
+      if (e.fly && b.type === 'cannon') continue;   // cannonballs can't reach flyers
       const d = dist(b, e), db = Math.hypot(e.x - BASE.x, e.y - BASE.y);
       if (d < st.range) { if (db < bd) { bd = db; best = e; } }
       else if (e.attacking && d < castleReach && db < bk) { bk = db; backup = e; }
@@ -569,7 +569,7 @@ function updateShots(G: GameState, dt: number) {
     if (s.target && !s.target.dead) { s.tx = s.target.x; s.ty = s.target.y; s.tz = 0.4 + s.target.fly; }
     const dx = s.tx - s.x, dy = s.ty - s.y, d = Math.hypot(dx, dy);
     const step = s.speed * dt;
-    // altura: interpolación + arco parabólico (los cañonazos van más altos)
+    // height: interpolation + parabolic arc (cannon shots go higher)
     const k = 1 - Math.min(1, d / Math.max(s.dist0, 0.01));
     const arc = s.type === 'cannon' ? 1.6 : 0.4;
     s.z = s.z0 + (s.tz - s.z0) * k + Math.sin(k * Math.PI) * arc;
@@ -598,7 +598,7 @@ function updateDrops(G: GameState, dt: number) {
       c.x += c.vx * dt; c.y += c.vy * dt;
       if (c.z <= 0) {
         c.z = 0; c.vz = 0; c.vx = c.vy = 0;
-        // si cae dentro del castillo o de una roca, rueda fuera (si no, nadie podría recogerla)
+        // if it lands inside the castle or a rock, it rolls out (otherwise nobody could pick it up)
         pushOutOfCastle(c, CASTLE_HALF + 0.2);
         avoidSolids(G, c, 0.15);
       }
@@ -606,10 +606,10 @@ function updateDrops(G: GameState, dt: number) {
   }
 }
 
-/** Medio lado de la caja sólida del castillo para el jugador: muralla + torreones + su propio cuerpo. */
+/** Half-side of the castle's solid box for the player: wall + turrets + the player's own body. */
 const CASTLE_SOLID = CASTLE_HALF + PLAYER_RADIUS;
 
-/** Saca un punto fuera del cuadrado del castillo (por el lado más cercano). */
+/** Pushes a point out of the castle square (through the nearest side). */
 function pushOutOfCastle(p: Vec, lim: number) {
   const ex = p.x - BASE.x, ey = p.y - BASE.y;
   if (Math.abs(ex) < lim && Math.abs(ey) < lim) {
@@ -619,13 +619,13 @@ function pushOutOfCastle(p: Vec, lim: number) {
 }
 
 // ------------------------------------------------------------
-//  Ayudantes (perros y peones)
+//  Helpers (dogs and peons)
 // ------------------------------------------------------------
-// Navegación: si el camino recto cruza el castillo, se rodea por la esquina más conveniente.
-const CASTLE_BLOCK = CASTLE_HALF + 0.15;   // caja que no se puede cruzar
-const CASTLE_CORNER = CASTLE_HALF + 0.55;   // esquinas por las que se rodea
+// Navigation: if the straight path crosses the castle, go around via the most convenient corner.
+const CASTLE_BLOCK = CASTLE_HALF + 0.15;   // box that can't be crossed
+const CASTLE_CORNER = CASTLE_HALF + 0.55;   // corners used to go around
 
-/** ¿El segmento a→b atraviesa el cuadrado del castillo? (Liang–Barsky) */
+/** Does segment a→b cross the castle square? (Liang–Barsky) */
 function crossesCastle(ax: number, ay: number, bx: number, by: number): boolean {
   const minX = BASE.x - CASTLE_BLOCK, maxX = BASE.x + CASTLE_BLOCK, minY = BASE.y - CASTLE_BLOCK, maxY = BASE.y + CASTLE_BLOCK;
   let t0 = 0, t1 = 1;
@@ -642,8 +642,8 @@ function crossesCastle(ax: number, ay: number, bx: number, by: number): boolean 
 
 function waypoint(from: Vec, goal: Vec): Vec {
   if (!crossesCastle(from.x, from.y, goal.x, goal.y)) return goal;
-  // esquina visible (y que no sea donde ya está) con el camino más corto;
-  // si desde esa esquina aún no se ve el destino, se penaliza (hará falta otra esquina después)
+  // visible corner (other than where it already is) with the shortest path;
+  // if the goal still isn't visible from that corner, it's penalised (another corner will be needed later)
   let best: Vec | null = null, bd = Infinity;
   for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
     const c = { x: BASE.x + sx * CASTLE_CORNER, y: BASE.y + sy * CASTLE_CORNER };
@@ -657,7 +657,7 @@ function waypoint(from: Vec, goal: Vec): Vec {
 function moveTowards(G: GameState, h: Helper, target: Vec, speed: number, stopAt: number, dt: number) {
   h.moving = false;
   h.goal = null;
-  // un destino pegado o dentro del castillo se cambia por el punto alcanzable más cercano
+  // a goal touching or inside the castle is replaced by the nearest reachable point
   const goal = { x: target.x, y: target.y };
   pushOutOfCastle(goal, CASTLE_HALF + 0.25);
   const realD = dist(h, goal);
@@ -670,7 +670,7 @@ function moveTowards(G: GameState, h: Helper, target: Vec, speed: number, stopAt
   h.faceX = dx / d; h.faceY = dy / d;
   h.moving = true;
   h.goal = wp;
-  pushOutOfCastle(h, CASTLE_HALF + 0.2);   // red de seguridad: nunca dentro del castillo
+  pushOutOfCastle(h, CASTLE_HALF + 0.2);   // safety net: never inside the castle
   avoidSolids(G, h, HELPERS.radius[h.kind], dx / d, dy / d, stepLen, h.id % 2 ? 1 : -1);
 }
 
@@ -699,7 +699,7 @@ function attack(G: GameState, h: Helper, e: Enemy, speed: number, dt: number) {
   if (dist(h, e) <= reach + 0.05) {
     h.faceX = (e.x - h.x) / (dist(h, e) || 1); h.faceY = (e.y - h.y) / (dist(h, e) || 1);
     if (h.atkCd <= 0) {
-      damageEnemy(G, e, cfg.dmg(h.level) * G.towerMult, null, 'dog');   // lo que mata un perro cae al suelo
+      damageEnemy(G, e, cfg.dmg(h.level) * G.towerMult, null, 'dog');   // what a dog kills drops on the ground
       h.atkCd = cfg.atkCd;
       h.attackT = 0.2;
       sfx(G, 'bite', h.x, h.y);
@@ -712,15 +712,15 @@ function updateDog(G: GameState, h: Helper, dt: number, reservedDrops: Set<numbe
   const cap = cfg.capacity(h.level), speed = cfg.speed(h.level);
   if (h.carry >= cap) return goDeliver(G, h, speed, dt);
 
-  // 1) enemigo muy cerca: a morder
-  // como mucho 2 perros por enemigo (si no, se estorban); el que ya perseguía cuenta siempre como libre
+  // 1) enemy very close: bite it
+  // at most 2 dogs per enemy (otherwise they get in each other's way); the one already chasing always counts as free
   const free = (e: Enemy) => e.id === h.targetId || (dogsOn.get(e.id) ?? 0) < 2;
   const go = (e: Enemy) => { dogsOn.set(e.id, (dogsOn.get(e.id) ?? 0) + 1); attack(G, h, e, speed, dt); };
   let near: Enemy | null = null, nd = cfg.aggroRange;
   for (const e of G.enemies) { const d = dist(h, e); if (d < nd && free(e)) { nd = d; near = e; } }
   if (near) return go(near);
 
-  // 2) monedas del suelo (sin repetir la que ya persigue otro perro)
+  // 2) ground coins (skipping any another dog is already chasing)
   let coin: Drop | null = G.drops.find(c => c.id === h.targetId && !c.taken) ?? null;
   if (!coin) {
     let cd = Infinity;
@@ -740,12 +740,12 @@ function updateDog(G: GameState, h: Helper, dt: number, reservedDrops: Set<numbe
   }
   if (h.carry > 0) return goDeliver(G, h, speed, dt);
 
-  // 3) enemigos cerca del jugador: a cazar
+  // 3) enemies near the player: hunt them
   let prey: Enemy | null = null, pd = cfg.huntRange;
   for (const e of G.enemies) { const d = dist(p, e); if (d < pd && free(e)) { pd = d; prey = e; } }
   if (prey) return go(prey);
 
-  // 4) nada que hacer: seguir al jugador, cada perro en su sitio
+  // 4) nothing to do: follow the player, each dog in its own spot
   h.mode = 'idle';
   h.targetId = -1;
   const a = Math.atan2(-p.faceY, -p.faceX) + (h.slot - 2.5) * 0.55;
@@ -758,12 +758,12 @@ function updatePeon(G: GameState, h: Helper, dt: number, peonLoad: Map<number, n
   const cap = cfg.capacity(h.level), speed = cfg.speed(h.level);
   if (h.carry >= cap) return goDeliver(G, h, speed, dt);
 
-  // mesa: la suya si sigue teniendo botín; si no, la que más botín libre tenga
+  // table: its own if it still has loot; otherwise the one with the most unclaimed loot
   let table: Building | null = G.buildings.find(b => b.id === h.targetId && b.table > 0) ?? null;
   if (!table) {
     let best = -Infinity;
     for (const b of G.buildings) {
-      const free = b.table - (peonLoad.get(b.id) ?? 0);   // lo que no van a coger ya otros peones
+      const free = b.table - (peonLoad.get(b.id) ?? 0);   // what other peons aren't already going to take
       if (free <= 0) continue;
       const score = free - Math.hypot(h.x - b.tx, h.y - b.ty) * 0.5;
       if (score > best) { best = score; table = b; }
@@ -771,7 +771,7 @@ function updatePeon(G: GameState, h: Helper, dt: number, peonLoad: Map<number, n
   }
   if (!table) {
     if (h.carry > 0) return goDeliver(G, h, speed, dt);
-    // sin trabajo: espera en la puerta de la cabaña, cada uno en su hueco
+    // no work: wait at the hut's door, each in its own spot
     h.mode = 'idle';
     h.targetId = -1;
     moveTowards(G, h, { x: h.home.x + (h.slot - 2.5) * 0.35, y: h.home.y + 0.8 + (h.slot % 2) * 0.3 }, speed, 0.1, dt);
@@ -781,10 +781,10 @@ function updatePeon(G: GameState, h: Helper, dt: number, peonLoad: Map<number, n
   h.mode = 'fetch';
   h.targetId = table.id;
   peonLoad.set(table.id, (peonLoad.get(table.id) ?? 0) + (cap - h.carry));
-  const spot = { x: table.tx + ((h.slot % 3) - 1) * 0.3, y: table.ty + 0.45 };   // delante de la mesa
+  const spot = { x: table.tx + ((h.slot % 3) - 1) * 0.3, y: table.ty + 0.45 };   // in front of the table
   moveTowards(G, h, spot, speed, 0.05, dt);
   if (Math.hypot(h.x - spot.x, h.y - spot.y) < HELPERS.tableRange) {
-    h.faceX = 0; h.faceY = -1;               // mirando a la mesa
+    h.faceX = 0; h.faceY = -1;               // facing the table
     h.acc += dt * cfg.tableRate(h.level);
     const n = Math.min(Math.floor(h.acc), table.table, cap - h.carry);
     h.acc -= Math.floor(h.acc);
@@ -810,7 +810,7 @@ function updateHelpers(G: GameState, dt: number) {
   G.drops = G.drops.filter(c => !c.taken);
 }
 
-/** Perros y peones chocan entre sí y con el jugador (al jugador no lo empujan). */
+/** Dogs and peons collide with each other and with the player (they don't push the player). */
 function collideHelpers(G: GameState) {
   const hs = G.helpers, p = G.player;
   for (let i = 0; i < hs.length; i++) {
@@ -819,7 +819,7 @@ function collideHelpers(G: GameState) {
       const b = hs[j];
       const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy), min = HELPERS.radius[a.kind] + HELPERS.radius[b.kind];
       if (d < min) {
-        // si están exactamente en el mismo sitio, se separan en una dirección cualquiera
+        // if they're in exactly the same spot, separate them in an arbitrary direction
         const nx = d > 1e-4 ? dx / d : Math.cos(i + j), ny = d > 1e-4 ? dy / d : Math.sin(i + j);
         const push = (min - d) / 2;
         a.x -= nx * push; a.y -= ny * push; b.x += nx * push; b.y += ny * push;
@@ -833,7 +833,7 @@ function collideHelpers(G: GameState) {
 }
 
 // ------------------------------------------------------------
-//  Paso de simulación
+//  Simulation step
 // ------------------------------------------------------------
 export function step(G: GameState, dt: number, dir: Vec) {
   if (G.over) return;
@@ -850,9 +850,9 @@ export function step(G: GameState, dt: number, dir: Vec) {
 }
 
 // ------------------------------------------------------------
-//  Piloto automático (menú de desarrollo): sirve para ver cómo escala la economía sin jugar.
-//  Recoge al instante todo el dinero del suelo y de las mesas, y compra la parcela más barata
-//  que se pueda pagar (la reparación solo si el castillo está tocado).
+//  Autopilot (dev menu): used to see how the economy scales without playing.
+//  Instantly collects all the money from the ground and the tables, and buys the cheapest pad
+//  it can afford (repair only if the castle is damaged).
 // ------------------------------------------------------------
 function autoplay(G: GameState) {
   const p = G.player;
