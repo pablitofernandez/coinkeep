@@ -17,7 +17,7 @@
 <div id="app"></div>
 <div id="hud">
   <div class="hud-left"><span class="coin-icon"></span><span id="hud-coins">0</span></div>
-  <div class="hud-center"><div id="hud-wave"></div><div id="hud-sub"></div></div>
+  <div class="hud-center"><div id="hud-wave"></div><div id="hud-sub"></div><div id="hud-cards"></div></div>
   <div class="hud-right"><div id="hud-hp-text">60/60</div><div class="hp-bar"><div id="hud-hp"></div></div></div>
   <div id="loading" data-i18n="loading">Loading…</div>
   <button id="mute" class="hud-btn" data-i18n-attr="aria-label:hud.mute;title:hud.sound">🔊</button>
@@ -46,6 +46,12 @@
   <p class="start" data-i18n="title.start"></p>
   <div class="lang" id="lang" role="radiogroup" data-i18n-attr="aria-label:title.language"></div>
   <p class="byline" data-i18n-html="title.byline"></p>
+</div>
+<div id="cards" class="hidden">
+  <h2 data-i18n="cards.title"></h2>
+  <div class="card-hand" id="card-hand"></div>
+  <button class="menu-btn" id="card-reroll"></button>
+  <p class="card-keys" data-i18n="cards.keys"></p>
 </div>
 <div id="gameover" class="hidden">
   <h1 data-i18n="over.title"></h1>

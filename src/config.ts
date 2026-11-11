@@ -83,9 +83,9 @@ export function pickEnemyKind(wave: number): EnemyKind {
  * `count` multiplies the enemies per wave.
  */
 export const DIFFICULTY: Record<Difficulty, { grow: number; mid: number; late: number; count: number; loot: number }> = {
-  normal:    { grow: 1.21, mid: 1.2,  late: 1.16, count: 1.4,  loot: 0.9 },
-  hard:      { grow: 1.22, mid: 1.21, late: 1.17, count: 1.45, loot: 0.85 },
-  nightmare: { grow: 1.24, mid: 1.23, late: 1.19, count: 1.6,  loot: 0.8 },
+  normal:    { grow: 1.21, mid: 1.2,  late: 1.22, count: 1.4,  loot: 0.9 },
+  hard:      { grow: 1.22, mid: 1.21, late: 1.23, count: 1.45, loot: 0.85 },
+  nightmare: { grow: 1.24, mid: 1.23, late: 1.25, count: 1.6,  loot: 0.8 },
 };
 export const DIFFICULTIES = Object.keys(DIFFICULTY) as Difficulty[];
 

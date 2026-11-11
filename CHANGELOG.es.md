@@ -2,6 +2,18 @@
 
 Lo que cambia en Coinkeep de una versión a otra, contado para jugadores. El juego muestra esta misma lista en la portada (**📜 Novedades**). La versión en inglés está en [CHANGELOG.md](CHANGELOG.md).
 
+## 0.5.0 — 2026-11-11
+
+### Novedades
+- **Cartas:** cada 2 oleadas el juego se pausa y te ofrece 3 cartas; te quedas con una. Hay 28, desde flechas más afiladas y botas más rápidas hasta aceite hirviendo en las murallas, un peón gratis o más daño contra los jefes.
+  - **Comunes**, **raras** (azules) y **épicas** (moradas). Tras una oleada de jefe, al menos una de las tres es rara o mejor.
+  - Dos épicas tienen precio: **Pacto de sangre** (más daño, menos vida del castillo) y **Fiebre del oro** (más monedas, más enemigos).
+  - ¿No te gusta la mano? **🎲 Otra mano** cambia las tres cartas a cambio de monedas de las que llevas; cada tirada extra en la misma ronda cuesta más.
+  - Tus cartas se ven debajo del contador de oleada. Con teclado, elige con 1, 2, 3 y pulsa R para otra mano.
+
+### Equilibrio
+- A partir de la oleada 30, los enemigos se hacen fuertes más deprisa, para que las partidas muy largas acaben llegando a su fin.
+
 ## 0.4.1 — 2026-11-11
 
 ### Equilibrio

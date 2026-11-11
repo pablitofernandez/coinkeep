@@ -2,6 +2,18 @@
 
 What changes in Coinkeep from one version to the next, written for players. The game shows this same list on the title screen (**📜 What's new**). The Spanish version is in [CHANGELOG.es.md](CHANGELOG.es.md).
 
+## 0.5.0 — 2026-11-11
+
+### New
+- **Cards:** after every 2nd wave the game pauses and offers you 3 cards; keep one. There are 28, from sharper arrows and faster boots to boiling oil on the walls, a free peon or extra damage against bosses.
+  - **Common**, **rare** (blue) and **epic** (purple). After a boss wave, at least one of the three is rare or better.
+  - Two epic cards come with a price: **Blood pact** (more damage, less castle health) and **Gold fever** (more coins, more enemies).
+  - Don't like the hand? **🎲 New hand** swaps the three cards for coins you carry; each extra one in the same round costs more.
+  - Your cards are shown under the wave counter. On a keyboard, choose with 1, 2, 3 and press R for a new hand.
+
+### Balance
+- From wave 30 on, enemies get tougher faster, so very long games come to an end.
+
 ## 0.4.1 — 2026-11-11
 
 ### Balance

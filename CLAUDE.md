@@ -43,6 +43,7 @@ G.helpers.push({ id: 99999, kind: 'peon', x: p.x + 1.2, y: p.y + 0.3, level: 1, 
   - Castle and player.
   - Economy, with autopilot.
   - Building.
+  - Cards: preview all 28 on the real card screen (3 at a time, nothing applied: `offer.preview`), offer a hand now, give any card, held cards and their effects (`G.mods`).
   - Time: speed ×0.25–×8, pause, step by step and **simulate up to wave N** with autopilot.
   - Visualization: collisions, ranges, paths, zoom and regenerate scenery.
   - Audio: sound board and volumes.
@@ -93,6 +94,7 @@ src/
     sim.ts         pure simulation (no Three.js): waves, enemies, player, pads, towers, shots, helpers
     stats.ts       per-wave stats for the logs
     cheats.ts      developer menu cheats (pure) and autopilot movement
+    cards.ts       cards (pure): CARDS definitions, rarities, CARD_RULES, computeMods() → G.mods, drawHand(), rerollCost()
   dev/
     panel.ts       developer menu (DOM); loaded with import() only in dev mode
   render/
@@ -172,6 +174,16 @@ Notes:
 
 ---
 
+## Cards (v0.5.0)
+
+- After every `CARD_RULES.every` (2) waves, when the wave timer runs out, `updateWaves` sets `G.offer` (3 cards from `drawHand`) and `step()` does nothing until `pickCard(G, id)` (sim.ts) is called. The autopilot (`G.dev.autoplay`) picks one at random. `G.cardsOn` is false on the title screen's showcase.
+- Rarity weights common 70 / rare 25 / epic 5 (`RARITY_WEIGHT`). After a boss wave at least one card is rare or better. Each card has a `max` stack and an optional `when` (e.g. cannon cards only with a cannon, wolf cards only with wolves).
+- Effects: continuous ones are numbers in `G.mods` (`computeMods`), read by the simulation (`cardDamage` applies the per-source/per-target damage multipliers in `damageEnemy`; tower range/rate/splash in `towerStats`; loot in `spawnEnemy`; interest and cart in `waveEndBonuses`). One-off effects (Reinforced walls, Blood pact, Discount, Foundations, Apprentice) are in `pickCard`.
+- Reroll («🎲 Otra mano / New hand»): pays `(5 + wave) × 1.5^rerolls` from the coins in hand (`rerollCards`), counted in `stats.spent.reroll`. Interest goes to `stats.earned.bonus`; Boiling oil kills to `stats.kills.castle`.
+- UI: `#cards` overlay in index.html, built by `updateCards()` in main.ts (keys 1/2/3 and R). Held cards show as icons in `#hud-cards`. Texts: `card.<id>.name` / `card.<id>.desc`, `rarity.<r>`, `cards.*` in i18n.ts.
+- Logs: each `WaveLog` has `cards` ("sharpArrows2 tithe1"); `clean-log.mjs` keeps it.
+- **Balance warning:** cards push runs past the economy "cliff". With the first values (sharp arrows +15 %, unlimited Reinforced walls/Discount/Foundations…) the autopilot never lost on Hard, with any single group of cards. The values were halved, the repeatables capped at 3 and `late` enemy growth raised (see Difficulty). Re-run the autopilot benchmark after changing any card number.
+
 ## Enemy types
 
 In `ENEMY_KINDS` (`config.ts`); they multiply the health, speed and loot of the wave's zombie. `pickEnemyKind` splits the wave by proportions that grow with the wave.
@@ -189,6 +201,7 @@ Chosen on the title screen (Normal / Hard / Nightmare) and saved in `localStorag
 - `count`: enemy count multiplier per wave.
 - `loot`: loot multiplier. Loot comes from a fixed curve (`lootHp`), not from health. **Money is what decides difficulty the most**: with more loot, towers and the forge grow faster than enemies and the game breaks (there is a "cliff": small changes go from losing at wave 30 to never losing).
 - Autopilot (collects better than a person), 8 runs each, after v0.4.1: Nightmare median wave 23, Hard 33, Normal bimodal (38–41 or 66–75: the economy "cliff"). Before v0.4.1: 20 / 31 / 40.
+- v0.5.0 (cards, autopilot picking at random, `late` +0.06: 1.22 / 1.23 / 1.25), 6 runs each: Nightmare ~32 (25–52), Hard ~37 (1 of 6 escaped to 68), Normal ~66 (41–70). Without the `late` change Hard never lost in 4 of 6 runs.
 - **Real players lose much earlier than the autopilot**: in the published version (v0.3–0.4.0, 27 games, 3 players) the medians were Normal 20, Hard 15, Nightmare 15. Target for humans: Normal ~30, Hard ~20, Nightmare ~15.
 - Benchmark from the console: import `sim.ts`, `cheats.ts` (exact URLs, see below), then loop `createGame(diff)` with `G.dev.autoplay = true` and `step(G, 1/60, autopilotDir(G))` until `G.over`, clearing `G.events` each step. Headless games don't send logs. With the browser pane hidden, yield with `setTimeout` and poll a `window.__result` instead of awaiting for more than ~40 s.
 - **To simulate from the console**, import the modules with the exact URL the page uses (`performance.getEntriesByType('resource')`, with its `?t=`). Importing plain `/src/config.ts` gives **another copy** of the module and the changes don't reach the simulation.
@@ -248,6 +261,7 @@ Analysis of the published version (2026-11-11, 27 finished games, see Difficulty
 - **Bosses are the wall:** 17 of 27 games ended on a boss wave (10, 15, 20). Players reach them with the castle already hurt (it didn't heal between waves; «Repair» gets 0–5 % of the spending on Nightmare), the boss holds the line and the wave piles up.
 - Archers do 55–78 % of the kills and get maxed early; cannon 0–19 %; dog 1–12 %. The peon brings 21–51 % of the income when bought, but most players never buy it, and 250–450 coins sit on the tables from wave 15.
 - **Applied in v0.4.1** (approved): clearing a whole wave heals the castle 12 % of max (`WAVES.clearHeal`), boss health ×6 instead of ×8 (`WAVES.bossHp`).
+- **Applied in v0.5.0** (approved): cards; enemy health growth after wave 30 (`late`) +0.06 on every difficulty, so long runs end.
 - Still pending (user to choose): separate the difficulties (Normal/Hard kinder: more loot, fewer enemies), make the peon known (earlier or cheaper first time), dog scaling, a reason to build cannons.
 
 Older adjustments proposed to the user, **not yet applied or approved**:

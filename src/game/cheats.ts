@@ -4,7 +4,8 @@
 //  Any cheat marks the game as "cheated".
 // ============================================================
 import { BASE, CASTLE_HALF, PLAYER, TOWER_UPGRADE } from '../config';
-import { completePad, killEnemy, placeProps, spawnEnemy } from './sim';
+import { completePad, killEnemy, pickCard, placeProps, spawnEnemy } from './sim';
+import { CARD_IDS, drawHand, type CardId } from './cards';
 import type { EnemyKind, GameState, Pad, PadType, Vec } from './types';
 
 export const mark = (G: GameState) => { G.cheated = true; };
@@ -130,6 +131,7 @@ export function regenProps(G: GameState) {
  * `showcaseTick` keeps the zombies coming.
  */
 export function showcase(G: GameState) {
+  G.cardsOn = false;                                  // no card offers on the title screen
   G.dev.godCastle = true;
   G.dev.pauseWaves = true;
   G.wave = 4;
@@ -185,4 +187,26 @@ export function liveWave(G: GameState) {
     spawnedKind: sub(s.spawnedKind, l.spawnedKind),
     seconds: Math.round(G.t - s.lastT),
   };
+}
+
+// ------------------------------------------------------------
+//  Cards (dev menu)
+// ------------------------------------------------------------
+/** Take a card right now (one-off effects included), even past its max. */
+export function giveCard(G: GameState, id: CardId) {
+  mark(G);
+  G.offer = { ids: [id], rerolls: 0 };
+  pickCard(G, id);
+}
+
+/** Offer a random hand now, as if a wave had just ended. */
+export function offerCardsNow(G: GameState) {
+  mark(G);
+  const ids = drawHand(G);
+  if (ids.length) G.offer = { ids, rerolls: 0 };
+}
+
+/** Show cards [from, from+3) on the real card screen without applying anything. */
+export function previewCards(G: GameState, from: number) {
+  G.offer = { ids: CARD_IDS.slice(from, from + 3), rerolls: 0, preview: true };
 }

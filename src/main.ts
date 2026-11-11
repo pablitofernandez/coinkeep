@@ -1,5 +1,6 @@
 import { autopilotDir, showcase, showcaseTick } from './game/cheats';
-import { createGame, step } from './game/sim';
+import { createGame, pickCard, rerollCards, step } from './game/sim';
+import { CARDS, CARD_IDS, rerollCost } from './game/cards';
 import type { Difficulty, GameState, Vec } from './game/types';
 import { DIFFICULTIES } from './config';
 import { cleanName, leaderboardEnabled, rankOf, savedName, submitScore, topScores, type Score } from './leaderboard';
@@ -266,17 +267,69 @@ function screenToWorld(s: Vec): Vec {
 }
 
 // --- HUD (the DOM is only touched when something changes: touching it every frame heats up phones)
-const hud = { coins: $('hud-coins'), wave: $('hud-wave'), sub: $('hud-sub'), hp: $('hud-hp'), hpText: $('hud-hp-text'), help: $('help') };
+const hud = { cards: $('hud-cards'), coins: $('hud-coins'), wave: $('hud-wave'), sub: $('hud-sub'), hp: $('hud-hp'), hpText: $('hud-hp-text'), help: $('help') };
 const cache = new Map<HTMLElement, string>();
 const setText = (el: HTMLElement, v: string) => { if (cache.get(el) !== v) { cache.set(el, v); el.textContent = v; } };
 const setStyle = (el: HTMLElement, prop: 'width' | 'opacity', v: string) => {
   const k = prop + v; if (cache.get(el) !== k) { cache.set(el, k); el.style[prop] = v; }
 };
 let lastOver = false;
+// --- cards: every few waves the game pauses and offers 3 (src/game/cards.ts)
+const cardsBox = $('cards'), cardHand = $('card-hand'), rerollBtn = $('card-reroll') as HTMLButtonElement;
+let shownOffer = '';
+guard(cardsBox);
+/** Show (or hide) the hand on offer. Only rebuilt when the offer changes. */
+function updateCards() {
+  const offer = G.offer;
+  const key = offer ? offer.ids.join(',') + '|' + offer.rerolls + '|' + getLang() : '';
+  if (key !== shownOffer) {
+    shownOffer = key;
+    cardsBox.classList.toggle('hidden', !offer);
+    cardHand.replaceChildren();
+    if (offer) {
+      offer.ids.forEach((id, i) => {
+        const def = CARDS[id], have = G.cards[id] ?? 0;
+        const b = document.createElement('button');
+        b.className = 'card ' + def.rarity;
+        const parts: [string, string][] = [
+          ['card-key', String(i + 1)], ['card-icon', def.icon], ['card-name', t(`card.${id}.name`)],
+          ['card-rarity', t(`rarity.${def.rarity}`)], ['card-desc', t(`card.${id}.desc`)], ['card-owned', have ? t('cards.owned', { n: have }) : ''],
+        ];
+        for (const [cls, text] of parts) { const el = document.createElement('span'); el.className = cls; el.textContent = text; b.appendChild(el); }
+        b.addEventListener('click', () => choose(i));
+        cardHand.appendChild(b);
+      });
+    }
+  }
+  if (offer) {
+    const cost = rerollCost(G);
+    setText(rerollBtn, t('cards.reroll', { cost }));
+    rerollBtn.disabled = G.player.coins < cost;
+    rerollBtn.classList.toggle('hidden', !!offer.preview);   // dev menu preview: nothing to reroll
+  }
+}
+function choose(i: number) {
+  const id = G.offer?.ids[i];
+  if (id) pickCard(G, id);
+  updateCards();
+}
+rerollBtn.addEventListener('click', () => { rerollCards(G); updateCards(); });
+window.addEventListener('keydown', e => {
+  if (!G.offer || inTitle || isTyping(e) || e.repeat) return;
+  if (e.key >= '1' && e.key <= '3') { e.preventDefault(); choose(Number(e.key) - 1); }
+  if (e.key.toLowerCase() === 'r') { e.preventDefault(); rerollCards(G); updateCards(); }
+});
+/** Cards held, as a row of icons under the wave counter. */
+function cardsRow() {
+  return CARD_IDS.filter(id => G.cards[id]).map(id => CARDS[id].icon + ((G.cards[id] ?? 0) > 1 ? '×' + G.cards[id] : '')).join(' ');
+}
+
 function updateHud() {
   setText(hud.coins, fmt(G.player.coins));
   setText(hud.wave, G.wave ? t('hud.wave', { n: G.wave }) : t('hud.ready'));
   setText(hud.sub, t('hud.next', { s: Math.ceil(G.waveTimer), n: G.enemies.length }));
+  setText(hud.cards, cardsRow());
+  updateCards();
   setStyle(hud.hp, 'width', Math.round(G.base.hp / G.base.max * 100) + '%');
   setText(hud.hpText, `🏰 ${Math.ceil(G.base.hp)}/${G.base.max}`);
   setStyle(hud.help, 'opacity', Math.max(0, Math.min(1, (10 - G.t) / 2)).toFixed(2));
@@ -320,6 +373,7 @@ function frame(now: number) {
     acc += dt;
     while (acc >= FIXED) { step(G, FIXED, { x: 0, y: 0 }); showcaseTick(G); acc -= FIXED; }
     view.render(G, dt);
+    updateCards();   // the dev menu can preview cards from here too
     return;
   }
   const dir = screenToWorld(input.screenDir());

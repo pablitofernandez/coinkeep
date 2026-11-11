@@ -1,3 +1,5 @@
+import type { CardId, CardMods } from './cards';
+
 // Game coordinates: (x, y) on the ground in tiles. The renderer maps them to (x, 0, y) in 3D.
 export interface Vec { x: number; y: number }
 
@@ -82,6 +84,7 @@ export interface Building extends Vec {
   level: number;
   baseCost: number;          // what it cost to build (to work out the upgrade price)
   startLevel: number;        // level it was built at (expensive towers start upgraded)
+  volley: number;            // shots fired (the "Arrow rain" card turns every 4th into three)
 }
 
 export interface Shot extends Vec {
@@ -148,6 +151,18 @@ export interface GameState {
   events: GameEvent[];
   dev: DevFlags;             // active dev menu cheats
   cheated: boolean;          // the dev menu was used this game (flagged in the log)
+  cardsOn: boolean;          // card offers happen in this game (not on the title screen's showcase)
+  cards: Partial<Record<CardId, number>>;   // cards taken (how many of each)
+  mods: CardMods;            // what those cards change (recomputed when one is taken)
+  offer: CardOffer | null;   // cards on the table: the simulation is paused until one is picked
+  offeredAt: number;         // last wave an offer was made after
+}
+
+/** Hand of cards to choose from. */
+export interface CardOffer {
+  ids: CardId[];
+  rerolls: number;
+  preview?: boolean;         // dev menu "Preview all": choosing just closes it, nothing is applied
 }
 
 /** Cheats that change how the simulation behaves (dev menu). */
@@ -167,13 +182,13 @@ export interface DevFlags {
 // ------------------------------------------------------------
 //  Game log
 // ------------------------------------------------------------
-export type KillSource = 'sword' | 'bow' | 'archer' | 'cannon' | 'dog';
-export type EarnSource = 'ground' | 'table' | 'dog' | 'peon';
+export type KillSource = 'sword' | 'bow' | 'archer' | 'cannon' | 'dog' | 'castle';
+export type EarnSource = 'ground' | 'table' | 'dog' | 'peon' | 'bonus';   // bonus: "Interest" card
 
 /** Counters accumulated since the start of the game. */
 export interface Counters {
   earned: Record<EarnSource, number>;     // coins that reach the player's stack, by source
-  spent: Partial<Record<PadType, number>>;// coins spent, by pad type
+  spent: Partial<Record<PadType | 'reroll', number>>;// coins spent, by pad type (and on card rerolls)
   kills: Record<KillSource, number>;
   baseDamage: number;
   spawned: number;
@@ -197,6 +212,7 @@ export interface WaveLog extends Counters {
   helpers: Record<HelperKind, number>;
   player: { sword: number; bow: number };
   pads: string;              // levels of the repeatable pads
+  cards: string;             // cards held at the end of the wave, e.g. "sharpArrows2 tithe1"
 }
 
 export interface Stats extends Counters {

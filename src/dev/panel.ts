@@ -8,6 +8,8 @@ import type { Sound } from '../audio';
 import type { DevLog } from '../devlog';
 import * as cheat from '../game/cheats';
 import { ENEMY_KINDS } from '../config';
+import { CARDS, CARD_IDS, NO_MODS, type CardId, type CardMods } from '../game/cards';
+import { t } from '../i18n';
 import type { DevFlags, EnemyKind, GameState, PadType, SfxName } from '../game/types';
 import type { TimeControl } from '../main';
 import type { View } from '../render/view';
@@ -36,6 +38,7 @@ const NAMES: Record<string, string> = {
   sword: 'sword', bow: 'crossbow', archer: 'archers', cannon: 'cannons',
   power: 'strength', repair: 'repair', forge: 'forge', kennel: 'wolves', upgrade: 'upgrades',
   zombie: 'warriors', runner: 'minions', bat: 'bats', shaman: 'mages', boss: 'bosses',
+  castle: 'boiling oil', bonus: 'interest', reroll: 'card rerolls',
 };
 
 const REPEATABLE: [PadType, string][] = [
@@ -222,6 +225,47 @@ export function initDevPanel(ctx: DevContext) {
       button(r, '+1', () => cheat.levelUp(G(), type, 1));
       button(r, '+5', () => cheat.levelUp(G(), type, 5));
     }
+  }
+
+  // ======================================================
+  //  🃏 Cards
+  // ======================================================
+  {
+    const s = section('🃏 Cards');
+    const pages = Math.ceil(CARD_IDS.length / 3);
+    let page = 0;
+    let r = row(s, 'Preview all');
+    button(r, '◀', () => { page = (page + pages - 1) % pages; cheat.previewCards(G(), page * 3); });
+    info(r, () => `${page + 1}/${pages}`);
+    button(r, '▶', () => { page = (page + 1) % pages; cheat.previewCards(G(), page * 3); });
+    button(r, 'Close', () => { G().offer = null; });
+    s.appendChild(el('p', 'dev-note', 'Shows the real card screen, 3 at a time, in the current language. Choosing a card there just closes it.'));
+    r = row(s);
+    button(r, 'Offer a hand now', () => cheat.offerCardsNow(G()));
+    r = row(s, 'Give');
+    const sel = el('select', 'dev-select') as HTMLSelectElement;
+    r.appendChild(sel);
+    const fillSel = () => {
+      sel.replaceChildren();
+      for (const id of CARD_IDS) {
+        const o = document.createElement('option');
+        o.value = id;
+        o.textContent = `${CARDS[id].icon} ${t(`card.${id}.name`)} (${CARDS[id].rarity})`;
+        sel.appendChild(o);
+      }
+    };
+    fillSel();
+    sel.addEventListener('focus', fillSel);   // picks up a language change
+    button(r, 'Give', () => cheat.giveCard(G(), sel.value as CardId));
+    r = row(s, 'Held');
+    info(r, () => CARD_IDS.filter(id => G().cards[id]).map(id => `${CARDS[id].icon}${(G().cards[id] ?? 0) > 1 ? '×' + G().cards[id] : ''}`).join(' ') || '—');
+    r = row(s, 'Effects');
+    info(r, () => {
+      const m = G().mods;
+      return (Object.keys(NO_MODS) as (keyof CardMods)[])
+        .filter(k => Math.abs(m[k] - NO_MODS[k]) > 1e-9)
+        .map(k => `${k} ${NO_MODS[k] === 0 ? m[k] : '×' + +m[k].toFixed(3)}`).join(' · ') || '—';
+    });
   }
 
   // ======================================================

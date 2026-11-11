@@ -3,13 +3,14 @@
 //  Used to analyse games and balance the difficulty.
 // ============================================================
 import { enemyStats } from '../config';
+import { cardsSummary } from './cards';
 import type { Counters, GameState, Stats, WaveLog } from './types';
 
 function emptyCounters(): Counters {
   return {
-    earned: { ground: 0, table: 0, dog: 0, peon: 0 },
+    earned: { ground: 0, table: 0, dog: 0, peon: 0, bonus: 0 },
     spent: {},
-    kills: { sword: 0, bow: 0, archer: 0, cannon: 0, dog: 0 },
+    kills: { sword: 0, bow: 0, archer: 0, cannon: 0, dog: 0, castle: 0 },
     baseDamage: 0,
     spawned: 0,
     spawnedKind: {},
@@ -63,6 +64,7 @@ export function logWave(G: GameState) {
     },
     player: { sword: +(G.player.swordDmg * G.towerMult).toFixed(1), bow: +(G.player.bowDmg * G.towerMult).toFixed(1) },
     pads: G.pads.filter(p => p.repeat && p.type !== 'upgrade' && p.level > 0).map(p => `${p.type}${p.level}`).join(' '),
+    cards: cardsSummary(G),
   };
   s.waves.push(log);
   s.last = snapshot(s);

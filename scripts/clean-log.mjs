@@ -13,6 +13,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:\d{2})$/;
 const TOWERS = /^([AC]\d{1,3}( [AC]\d{1,3})*)?$/;
 const PADS = /^((archer|cannon|power|repair|forge|kennel|peon|upgrade)\d{1,3}( (archer|cannon|power|repair|forge|kennel|peon|upgrade)\d{1,3})*)?$/;
+// cards held (v0.5+), e.g. "sharpArrows2 tithe1"; optional in older logs
+const CARDS = /^([a-zA-Z]{1,20}[0-9]{1,2}( [a-zA-Z]{1,20}[0-9]{1,2})*)?$/;
 const VERSION = /^([0-9a-f]{7,40}|dev)$/;
 const SCREEN = /^\d{1,5}x\d{1,5}@\d{1,2}(\.\d{1,2})?$/;
 const PLATFORMS = ['iPhone', 'iPad', 'Android', 'Windows', 'Mac', 'Linux', 'Otro'];   // 'Otro' (= other) is the value the game sends
@@ -51,7 +53,8 @@ export function cleanWave(w) {
   if (!earned || !spent || !kills || !spawnedKind || !helpers || !player) return null;
   if (typeof w.towers !== 'string' || !TOWERS.test(w.towers)) return null;
   if (typeof w.pads !== 'string' || !PADS.test(w.pads)) return null;
-  return { ...nums, earned, spent, kills, spawnedKind, towers: w.towers, helpers, player, pads: w.pads };
+  if (w.cards !== undefined && (typeof w.cards !== 'string' || !CARDS.test(w.cards))) return null;
+  return { ...nums, earned, spent, kills, spawnedKind, towers: w.towers, helpers, player, pads: w.pads, ...(w.cards !== undefined ? { cards: w.cards } : {}) };
 }
 
 /** A row's "now" snapshot, or undefined. */
